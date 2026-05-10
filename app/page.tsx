@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc, setDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
 import { Settings, Trash2, Plus, Search, Download, User, LogOut, Phone } from "lucide-react";
@@ -20,6 +20,8 @@ interface CargoItem {
   phone: string;
   kg: string;
   kub: string;
+  status?: string;
+  totalPrice?: number;
   createdAt: any;
 }
 
@@ -34,12 +36,17 @@ export default function Home() {
   const [selectedListId, setSelectedListId] = useState("");
   const [newListName, setNewListName] = useState("");
 
+  // Rates States
+  const [ratePerKg, setRatePerKg] = useState("0");
+  const [ratePerVolume, setRatePerVolume] = useState("0");
+
   // Cargo Form States
   const [stillage, setStillage] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
+  const [totalPrice, setTotalPrice] = useState("");
 
   // Cargo Data and Search
   const [cargoList, setCargoList] = useState<CargoItem[]>([]);
@@ -78,6 +85,19 @@ export default function Home() {
     });
     return () => unsubscribe();
   }, [isAuthenticated, selectedListId]);
+
+  // Fetch Rates
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsubscribe = onSnapshot(doc(db, "settings", "rates"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setRatePerKg(data.ratePerKg || "0");
+        setRatePerVolume(data.ratePerVolume || "0");
+      }
+    });
+    return () => unsubscribe();
+  }, [isAuthenticated]);
 
   // Fetch Cargo Items for Selected List
   useEffect(() => {
@@ -176,6 +196,51 @@ export default function Home() {
     }
   };
 
+  const handleSaveRates = async () => {
+    try {
+      await setDoc(doc(db, "settings", "rates"), {
+        ratePerKg,
+        ratePerVolume
+      }, { merge: true });
+      alert("Тарифы успешно сохранены!");
+    } catch (error) {
+      console.error("Error saving rates:", error);
+      alert("Ошибка при сохранении тарифов");
+    }
+  };
+
+  const calculateTotalPrice = (w: string, v: string) => {
+    const weightNum = parseFloat(w) || 0;
+    const volNum = parseFloat(v) || 0;
+    const rKgNum = parseFloat(ratePerKg) || 0;
+    const rVolNum = parseFloat(ratePerVolume) || 0;
+    const sum = (weightNum * rKgNum) + (volNum * rVolNum);
+    if (sum > 0) {
+      setTotalPrice(sum.toFixed(2));
+    } else {
+      setTotalPrice("");
+    }
+  };
+
+  const handleKgChange = (val: string) => {
+    setKg(val);
+    calculateTotalPrice(val, kub);
+  };
+
+  const handleKubChange = (val: string) => {
+    setKub(val);
+    calculateTotalPrice(kg, val);
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, "cargo", id), { status: newStatus });
+    } catch (error) {
+      console.error("Error updating status: ", error);
+      alert("Ошибка при обновлении статуса");
+    }
+  };
+
   const saveData = async () => {
     if (!selectedListId) {
       alert("Пожалуйста, выберите или создайте лист перед сохранением");
@@ -194,6 +259,8 @@ export default function Home() {
         phone,
         kg,
         kub,
+        status: "Принято",
+        totalPrice: parseFloat(totalPrice) || 0,
         createdAt: new Date()
       });
       alert("Saved successfully!");
@@ -202,6 +269,7 @@ export default function Home() {
       setPhone("");
       setKg("");
       setKub("");
+      setTotalPrice("");
     } catch (error) {
       console.error("Error adding document: ", error);
       alert("Error saving data");
@@ -242,6 +310,8 @@ export default function Home() {
         "Телефон / ID": item.phone || "",
         "Вес (кг)": item.kg || "",
         "Объём (куб)": item.kub || "",
+        "Статус": item.status || "Принято",
+        "Сумма ($)": item.totalPrice || 0,
         "Дата": dateStr,
       };
     });
@@ -255,6 +325,8 @@ export default function Home() {
       { wch: 20 }, // Телефон / ID
       { wch: 10 }, // Вес (кг)
       { wch: 15 }, // Объём (куб)
+      { wch: 15 }, // Статус
+      { wch: 12 }, // Сумма ($)
       { wch: 15 }, // Дата
     ];
     worksheet["!cols"] = cols;
@@ -364,6 +436,39 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Global Rates */}
+          <div className="bg-white rounded-xl p-4 shadow-sm flex flex-col gap-3 border border-gray-100">
+            <p className="font-bold text-gray-700">💰 Глобальные тарифы ($):</p>
+            <div className="flex gap-2">
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs font-bold text-gray-500">За кг</label>
+                <input
+                  type="number"
+                  value={ratePerKg}
+                  onChange={(e) => setRatePerKg(e.target.value)}
+                  className="p-2 border border-gray-200 rounded-md outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs font-bold text-gray-500">За куб</label>
+                <input
+                  type="number"
+                  value={ratePerVolume}
+                  onChange={(e) => setRatePerVolume(e.target.value)}
+                  className="p-2 border border-gray-200 rounded-md outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex flex-col justify-end">
+                <button
+                  onClick={handleSaveRates}
+                  className="bg-blue-600 rounded-md px-4 py-2 text-white font-bold hover:bg-blue-700 transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
             <Search className="text-gray-400 w-5 h-5" />
@@ -436,7 +541,7 @@ export default function Home() {
                 <input
                   type="text"
                   value={kg}
-                  onChange={(e) => setKg(e.target.value)}
+                  onChange={(e) => handleKgChange(e.target.value)}
                   className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
                 />
               </div>
@@ -445,10 +550,22 @@ export default function Home() {
                 <input
                   type="text"
                   value={kub}
-                  onChange={(e) => setKub(e.target.value)}
+                  onChange={(e) => handleKubChange(e.target.value)}
                   className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
+
+            {/* Field 5: Total Price */}
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Итоговая сумма ($)</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                value={totalPrice}
+                onChange={(e) => setTotalPrice(e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-green-700"
+              />
             </div>
 
             {/* Save Button */}
@@ -480,14 +597,27 @@ export default function Home() {
                         📞 {item.phone}
                       </div>
                     )}
-                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                    <div className="flex gap-4 text-sm text-gray-600 mt-1 items-center">
                       <span>⚖️ {item.kg} кг</span>
                       <span>📦 {item.kub} куб</span>
+                      <span className="font-bold text-green-700">💰 {item.totalPrice || 0} $</span>
+                    </div>
+                    <div className="mt-2">
+                      <select
+                        value={item.status || "Принято"}
+                        onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                        className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500"
+                      >
+                        <option value="Принято">Принято</option>
+                        <option value="В пути">В пути</option>
+                        <option value="На складе">На складе</option>
+                        <option value="Выдано">Выдано</option>
+                      </select>
                     </div>
                   </div>
                   <button
                     onClick={() => handleDeleteCargo(item.id)}
-                    className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                    className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors h-fit self-start"
                     title="Удалить"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -501,3 +631,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -17,6 +17,8 @@ interface Cargo {
   phone: string;
   kg: string;
   kub: string;
+  status?: string;
+  totalPrice?: number;
   createdAt: any;
 }
 
@@ -70,6 +72,16 @@ export default function UsersPanel() {
     return matchName || matchPhone;
   });
 
+  const getStatusColor = (status?: string) => {
+    switch(status) {
+      case "Принято": return "bg-gray-200 text-gray-800";
+      case "В пути": return "bg-yellow-100 text-yellow-800";
+      case "На складе": return "bg-green-100 text-green-800";
+      case "Выдано": return "bg-purple-100 text-purple-800";
+      default: return "bg-gray-200 text-gray-800";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Main container */}
@@ -120,19 +132,25 @@ export default function UsersPanel() {
             filteredCargoList.map((cargo, index) => (
               <div key={cargo.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
                 <div className="flex justify-between items-start">
-                  <span className="font-bold text-gray-800 text-lg">{cargo.name}</span>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-gray-800 text-lg">{cargo.name}</span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-md w-fit ${getStatusColor(cargo.status)}`}>
+                      {cargo.status || "Принято"}
+                    </span>
+                  </div>
                   <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
                     Стеллаж: {cargo.stillage}
                   </span>
                 </div>
                 {cargo.phone && (
-                  <div className="text-sm text-gray-500 font-mono">
+                  <div className="text-sm text-gray-500 font-mono mt-1">
                     📞 {cargo.phone}
                   </div>
                 )}
-                <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                <div className="flex gap-4 text-sm text-gray-600 mt-1 items-center">
                   <span>⚖️ {cargo.kg} кг</span>
                   <span>📦 {cargo.kub} куб</span>
+                  <span className="font-bold text-green-700">💰 {cargo.totalPrice || 0} $</span>
                 </div>
               </div>
             ))
