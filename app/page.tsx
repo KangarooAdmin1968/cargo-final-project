@@ -86,7 +86,6 @@ export default function Home() {
     }
     const q = query(
       collection(db, "cargo"),
-      where("listId", "==", selectedListId),
       orderBy("createdAt", "desc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -101,6 +100,7 @@ export default function Home() {
 
   // Derived filtered cargo list
   const filteredCargoList = cargoList.filter((item) => {
+    if (item.listId !== selectedListId) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const matchName = item.name.toLowerCase().includes(q);
@@ -218,6 +218,35 @@ export default function Home() {
     }
   };
 
+  const handleExportExcel = () => {
+    if (filteredCargoList.length === 0) {
+      alert("Нет данных для экспорта");
+      return;
+    }
+
+    const headers = ["№", "Name", "Phone", "Weight", "Volume", "Date"];
+    const rows = filteredCargoList.map((item, index) => {
+      const dateStr = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : "";
+      return [
+        index + 1,
+        `"${item.name || ""}"`,
+        `"${item.phone || ""}"`,
+        `"${item.kg || ""}"`,
+        `"${item.kub || ""}"`,
+        `"${dateStr}"`
+      ].join(",");
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "CargoExport.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (authChecking) {
     return <div className="min-h-screen bg-gray-50 flex justify-center items-center">Загрузка...</div>;
   }
@@ -327,7 +356,10 @@ export default function Home() {
           </div>
 
           {/* Export Button */}
-          <button className="w-full bg-green-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors">
+          <button
+            onClick={handleExportExcel}
+            className="w-full bg-green-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors"
+          >
             <Download className="w-5 h-5" />
             Экспорт в Excel
           </button>

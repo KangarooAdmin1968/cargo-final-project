@@ -3,17 +3,49 @@ import { useState, useEffect } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
+interface CargoList {
+  id: string;
+  name: string;
+  createdAt: any;
+}
+
 interface Cargo {
   id: string;
+  listId: string;
   stillage: string;
   name: string;
+  phone: string;
   kg: string;
   kub: string;
+  createdAt: any;
 }
 
 export default function UsersPanel() {
+  const [lists, setLists] = useState<CargoList[]>([]);
+  const [selectedListId, setSelectedListId] = useState("");
   const [cargos, setCargos] = useState<Cargo[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
+  // Fetch Lists
+  useEffect(() => {
+    const q = query(collection(db, "lists"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedLists: CargoList[] = [];
+      snapshot.forEach((doc) => {
+        fetchedLists.push({ id: doc.id, ...doc.data() } as CargoList);
+      });
+      setLists(fetchedLists);
+      
+      if (fetchedLists.length > 0 && !selectedListId) {
+        setSelectedListId(fetchedLists[0].id);
+      } else if (fetchedLists.length === 0) {
+        setSelectedListId("");
+      }
+    });
+    return () => unsubscribe();
+  }, [selectedListId]);
+
+  // Fetch Cargo Items
   useEffect(() => {
     const q = query(collection(db, "cargo"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -27,6 +59,17 @@ export default function UsersPanel() {
     return () => unsubscribe();
   }, []);
 
+  // Filtered Cargo Items
+  const filteredCargoList = cargos.filter((item) => {
+    if (item.listId !== selectedListId) return false;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const matchName = item.name.toLowerCase().includes(q);
+    const phoneStr = item.phone || "";
+    const matchPhone = phoneStr.includes(q);
+    return matchName || matchPhone;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Main container */}
@@ -38,37 +81,59 @@ export default function UsersPanel() {
         </h1>
 
         {/* Login Button */}
-        <button className="w-full bg-blue-600 rounded-xl p-3 text-white text-center font-bold">
-          Вход
+        <button 
+          className="w-full bg-blue-600 rounded-xl p-3 text-white text-center font-bold hover:bg-blue-700 transition-colors"
+          onClick={() => window.location.href = '/'}
+        >
+          Вход в Админ панель
         </button>
 
         {/* Sheet Selector */}
         <div className="flex flex-col gap-2">
           <p className="font-bold text-gray-700">📁 Выберите лист:</p>
-          <select className="border rounded-md p-2 w-full bg-white outline-none">
-            <option>31/07</option>
+          <select 
+            className="border border-gray-200 rounded-md p-2 w-full bg-white outline-none focus:border-blue-500"
+            value={selectedListId}
+            onChange={(e) => setSelectedListId(e.target.value)}
+          >
+            {lists.length === 0 && <option value="">Нет листов</option>}
+            {lists.map(list => (
+              <option key={list.id} value={list.id}>{list.name}</option>
+            ))}
           </select>
         </div>
 
         {/* Search Bar */}
         <input
           type="text"
-          placeholder="Поиск по имени или последним 4 циф"
-          className="bg-white border rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Поиск по имени или последним 4 цифрам тел."
+          className="bg-white border border-gray-200 rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500"
         />
 
         {/* Data Cards Container */}
         <div className="flex flex-col gap-3 mt-2">
-          {cargos.length === 0 ? (
+          {filteredCargoList.length === 0 ? (
             <p className="text-center text-gray-500">Нет данных</p>
           ) : (
-            cargos.map((cargo, index) => (
-              <div key={cargo.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-1">
-                <span className="font-bold text-gray-800">#: {index + 1}</span>
-                <span className="font-bold text-gray-800">Название: {cargo.name}</span>
-                <span className="font-bold text-gray-800">Номер: {cargo.stillage}</span>
-                <span className="font-bold text-gray-800">Kg: {cargo.kg}</span>
-                <span className="font-bold text-gray-800">Kub: {cargo.kub}</span>
+            filteredCargoList.map((cargo, index) => (
+              <div key={cargo.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-gray-800 text-lg">{cargo.name}</span>
+                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
+                    Стеллаж: {cargo.stillage}
+                  </span>
+                </div>
+                {cargo.phone && (
+                  <div className="text-sm text-gray-500 font-mono">
+                    📞 {cargo.phone}
+                  </div>
+                )}
+                <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                  <span>⚖️ {cargo.kg} кг</span>
+                  <span>📦 {cargo.kub} куб</span>
+                </div>
               </div>
             ))
           )}
