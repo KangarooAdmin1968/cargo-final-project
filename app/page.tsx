@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
 import { Settings, Trash2, Plus, Search, Download, User, LogOut, Phone } from "lucide-react";
+import * as XLSX from "xlsx";
 
 interface CargoList {
   id: string;
@@ -224,27 +225,47 @@ export default function Home() {
       return;
     }
 
-    const headers = ["№", "Name", "Phone", "Weight", "Volume", "Date"];
-    const rows = filteredCargoList.map((item, index) => {
-      const dateStr = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : "";
-      return [
-        index + 1,
-        `"${item.name || ""}"`,
-        `"${item.phone || ""}"`,
-        `"${item.kg || ""}"`,
-        `"${item.kub || ""}"`,
-        `"${dateStr}"`
-      ].join(",");
+    const exportData = filteredCargoList.map((item, index) => {
+      let dateStr = "";
+      if (item.createdAt?.toDate) {
+        const d = item.createdAt.toDate();
+        // Add padding to ensure DD.MM.YYYY format exactly
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        dateStr = `${day}.${month}.${year}`;
+      }
+
+      return {
+        "№": index + 1,
+        "Название": item.name || "",
+        "Телефон / ID": item.phone || "",
+        "Вес (кг)": item.kg || "",
+        "Объём (куб)": item.kub || "",
+        "Дата": dateStr,
+      };
     });
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",") + "\n" + rows.join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "CargoExport.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Auto-width for columns
+    const cols = [
+      { wch: 5 },  // №
+      { wch: 25 }, // Название
+      { wch: 20 }, // Телефон / ID
+      { wch: 10 }, // Вес (кг)
+      { wch: 15 }, // Объём (куб)
+      { wch: 15 }, // Дата
+    ];
+    worksheet["!cols"] = cols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Cargo List");
+
+    const date = new Date().toLocaleDateString("ru-RU").replace(/\./g, "-");
+    const filename = `Cargo_Report_${date}.xlsx`;
+
+    XLSX.writeFile(workbook, filename);
   };
 
   if (authChecking) {
