@@ -1,6 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "firebase/firestore";
+
+interface CargoItem {
+  id: string;
+  stillage: string;
+  name: string;
+  kg: string;
+  kub: string;
+  createdAt: any;
+}
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
 import { Settings, Trash2, Plus, Search, Download, User, LogOut } from "lucide-react";
@@ -15,6 +24,33 @@ export default function Home() {
   const [name, setName] = useState("");
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
+  const [cargoList, setCargoList] = useState<CargoItem[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const q = query(collection(db, "cargo"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const items: CargoItem[] = [];
+      querySnapshot.forEach((doc) => {
+        items.push({ id: doc.id, ...doc.data() } as CargoItem);
+      });
+      setCargoList(items);
+    });
+
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Вы уверены, что хотите удалить эту запись?")) {
+      try {
+        await deleteDoc(doc(db, "cargo", id));
+      } catch (error) {
+        console.error("Error deleting document: ", error);
+        alert("Ошибка при удалении");
+      }
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -220,6 +256,38 @@ export default function Home() {
             >
               Сохранить данные
             </button>
+          </div>
+
+          {/* Cargo List */}
+          <div className="flex flex-col gap-3">
+            <h2 className="font-bold text-gray-800 text-lg px-1">Список грузов</h2>
+            {cargoList.length === 0 ? (
+              <p className="text-gray-500 text-sm px-1">Список пуст</p>
+            ) : (
+              cargoList.map((item) => (
+                <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex justify-between items-center gap-4">
+                  <div className="flex flex-col flex-1 gap-1">
+                    <div className="flex justify-between items-start">
+                      <span className="font-bold text-gray-800">{item.name}</span>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
+                        Стеллаж: {item.stillage}
+                      </span>
+                    </div>
+                    <div className="flex gap-4 text-sm text-gray-600 mt-1">
+                      <span>⚖️ {item.kg} кг</span>
+                      <span>📦 {item.kub} куб</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                    title="Удалить"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </main>
       </div>
