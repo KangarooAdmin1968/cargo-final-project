@@ -1,13 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
 interface CargoList {
   id: string;
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createdAt: any;
+  createdAt: { toDate?: () => Date } | null;
 }
 
 interface Cargo {
@@ -20,8 +19,7 @@ interface Cargo {
   kub: string;
   status?: string;
   totalPrice?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createdAt: any;
+  createdAt: { toDate?: () => Date } | null;
 }
 
 export default function UsersPanel() {
@@ -49,9 +47,15 @@ export default function UsersPanel() {
     return () => unsubscribe();
   }, [selectedListId]);
 
-  // Fetch Cargo Items
+  // Fetch Cargo Items for the selected list
   useEffect(() => {
-    const q = query(collection(db, "cargo"), orderBy("createdAt", "desc"));
+    if (!selectedListId) return;
+
+    const q = query(
+      collection(db, "cargo"),
+      where("listId", "==", selectedListId),
+      orderBy("createdAt", "desc")
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const cargoData: Cargo[] = [];
       snapshot.forEach((doc) => {
@@ -61,7 +65,7 @@ export default function UsersPanel() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [selectedListId]);
 
   // Filtered Cargo Items
   const filteredCargoList = cargos.filter((item) => {
@@ -87,7 +91,7 @@ export default function UsersPanel() {
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Main container */}
-      <div className="w-full max-w-md bg-gray-50 min-h-screen flex flex-col gap-4 p-4">
+      <div className="w-full max-w-5xl bg-gray-50 min-h-screen flex flex-col gap-4 p-4">
 
         {/* Header */}
         <h1 className="text-center font-bold text-xl mt-4 text-gray-800">
@@ -126,8 +130,8 @@ export default function UsersPanel() {
           className="bg-white border border-gray-200 rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500"
         />
 
-        {/* Data Cards Container */}
-        <div className="flex flex-col gap-3 mt-2">
+        {/* Mobile View: Data Cards (Hidden on Large Screens) */}
+        <div className="flex flex-col gap-3 mt-2 lg:hidden">
           {filteredCargoList.length === 0 ? (
             <p className="text-center text-gray-500">Нет данных</p>
           ) : (
@@ -159,7 +163,54 @@ export default function UsersPanel() {
           )}
         </div>
 
+        {/* Desktop View: Table (Hidden on Mobile) */}
+        <div className="hidden lg:block mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="bg-gray-100 text-gray-700 text-sm font-bold border-b border-gray-200">
+                <th className="p-4">№</th>
+                <th className="p-4">Name</th>
+                <th className="p-4">Phone</th>
+                <th className="p-4 text-center">Stillage</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-right">Total Price</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredCargoList.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
+                    Нет данных
+                  </td>
+                </tr>
+              ) : (
+                filteredCargoList.map((cargo, index) => (
+                  <tr key={cargo.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="p-4 text-sm text-gray-500">{index + 1}</td>
+                    <td className="p-4 font-bold text-gray-800">{cargo.name}</td>
+                    <td className="p-4 text-sm text-gray-500 font-mono">{cargo.phone || "—"}</td>
+                    <td className="p-4 text-center">
+                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
+                        {cargo.stillage}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-md ${getStatusColor(cargo.status)}`}>
+                        {cargo.status || "Принято"}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right font-bold text-green-700">
+                      {cargo.totalPrice || 0} $
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
       </div>
     </div>
   );
 }
+

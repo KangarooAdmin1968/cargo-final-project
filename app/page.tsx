@@ -9,8 +9,7 @@ import * as XLSX from "xlsx";
 interface CargoList {
   id: string;
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createdAt: any;
+  createdAt: { toDate?: () => Date } | null;
 }
 
 interface CargoItem {
@@ -24,8 +23,7 @@ interface CargoItem {
   kub: string;
   status?: string;
   totalPrice?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createdAt: any;
+  createdAt: { toDate?: () => Date } | null;
 }
 
 export default function Home() {
@@ -108,13 +106,12 @@ export default function Home() {
 
   // Fetch Cargo Items for Selected List
   useEffect(() => {
-    if (!isAuthenticated || !selectedListId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCargoList([]);
-      return;
-    }
+    if (!isAuthenticated || !selectedListId) return;
+
+    // We only fetch cargo for the current list to keep it efficient
     const q = query(
       collection(db, "cargo"),
+      where("listId", "==", selectedListId),
       orderBy("createdAt", "desc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -287,15 +284,14 @@ export default function Home() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEditChange = (field: keyof CargoItem, value: any) => {
+  const handleEditChange = (field: keyof CargoItem, value: string | number | undefined) => {
     setEditForm((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, [field]: value };
 
       if (field === 'kg' || field === 'kub') {
-        const w = parseFloat(field === 'kg' ? value : (updated.kg || "0")) || 0;
-        const v = parseFloat(field === 'kub' ? value : (updated.kub || "0")) || 0;
+        const w = parseFloat(field === 'kg' ? String(value) : (updated.kg || "0")) || 0;
+        const v = parseFloat(field === 'kub' ? String(value) : (updated.kub || "0")) || 0;
         const rKg = parseFloat(ratePerKg) || 0;
         const rVol = parseFloat(ratePerVolume) || 0;
         const sum = (w * rKg) + (v * rVol);
