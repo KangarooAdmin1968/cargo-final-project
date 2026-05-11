@@ -258,14 +258,14 @@ export default function Home() {
         totalPrice: parseFloat(totalPrice) || 0,
         createdAt: new Date()
       });
-      
+
       const currentStillageNum = parseInt(stillage);
       if (!isNaN(currentStillageNum)) {
         setStillage(String(currentStillageNum + 1));
       } else {
         setStillage("");
       }
-      
+
       setName("");
       setPhone("");
       setTrackCodes("");
