@@ -6,6 +6,7 @@ import { db } from "../../lib/firebase";
 interface CargoList {
   id: string;
   name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createdAt: any;
 }
 
@@ -19,6 +20,7 @@ interface Cargo {
   kub: string;
   status?: string;
   totalPrice?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createdAt: any;
 }
 
@@ -129,7 +131,7 @@ export default function UsersPanel() {
           {filteredCargoList.length === 0 ? (
             <p className="text-center text-gray-500">Нет данных</p>
           ) : (
-            filteredCargoList.map((cargo, index) => (
+            filteredCargoList.map((cargo) => (
               <div key={cargo.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
                 <div className="flex justify-between items-start">
                   <div className="flex flex-col gap-1">

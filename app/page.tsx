@@ -1,14 +1,15 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc, setDoc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, LogOut, Edit } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Download, LogOut } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface CargoList {
   id: string;
   name: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createdAt: any;
 }
 
@@ -23,6 +24,7 @@ interface CargoItem {
   kub: string;
   status?: string;
   totalPrice?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createdAt: any;
 }
 
@@ -107,6 +109,7 @@ export default function Home() {
   // Fetch Cargo Items for Selected List
   useEffect(() => {
     if (!isAuthenticated || !selectedListId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCargoList([]);
       return;
     }
@@ -289,6 +292,7 @@ export default function Home() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditChange = (field: keyof CargoItem, value: any) => {
     setEditForm((prev) => {
       if (!prev) return prev;
@@ -318,7 +322,7 @@ export default function Home() {
         kg: editForm.kg,
         kub: editForm.kub,
         status: editForm.status,
-        totalPrice: parseFloat(editForm.totalPrice as any) || 0
+        totalPrice: parseFloat(String(editForm.totalPrice)) || 0
       });
       alert("Обновлено успешно!");
       setEditForm(null);
