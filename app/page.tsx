@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc, setDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, User, LogOut, Phone } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Download, User, LogOut, Phone, Edit } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface CargoList {
@@ -47,6 +47,9 @@ export default function Home() {
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
+
+  // Edit Form States
+  const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
 
   // Cargo Data and Search
   const [cargoList, setCargoList] = useState<CargoItem[]>([]);
@@ -284,6 +287,44 @@ export default function Home() {
         console.error("Error deleting document: ", error);
         alert("Ошибка при удалении");
       }
+    }
+  };
+
+  const handleEditChange = (field: keyof CargoItem, value: any) => {
+    setEditForm((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, [field]: value };
+
+      // Auto-calculate total price if kg or kub changed
+      if (field === 'kg' || field === 'kub') {
+        const w = parseFloat(field === 'kg' ? value : (updated.kg || "0")) || 0;
+        const v = parseFloat(field === 'kub' ? value : (updated.kub || "0")) || 0;
+        const rKg = parseFloat(ratePerKg) || 0;
+        const rVol = parseFloat(ratePerVolume) || 0;
+        const sum = (w * rKg) + (v * rVol);
+        updated.totalPrice = sum > 0 ? parseFloat(sum.toFixed(2)) : 0;
+      }
+      return updated;
+    });
+  };
+
+  const handleUpdateCargo = async () => {
+    if (!editForm || !editForm.id) return;
+    try {
+      await updateDoc(doc(db, "cargo", editForm.id), {
+        name: editForm.name,
+        phone: editForm.phone,
+        stillage: editForm.stillage,
+        kg: editForm.kg,
+        kub: editForm.kub,
+        status: editForm.status,
+        totalPrice: parseFloat(editForm.totalPrice as any) || 0
+      });
+      alert("Обновлено успешно!");
+      setEditForm(null);
+    } catch (error) {
+      console.error("Error updating document: ", error);
+      alert("Ошибка при обновлении");
     }
   };
 
@@ -615,20 +656,127 @@ export default function Home() {
                       </select>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteCargo(item.id)}
-                    className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors h-fit self-start"
-                    title="Удалить"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  <div className="flex gap-1 h-fit self-start">
+                    <button
+                      onClick={() => setEditForm(item)}
+                      className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors"
+                      title="Редактировать"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCargo(item.id)}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                      title="Удалить"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </main>
       </div>
+
+      {/* Edit Modal */}
+      {editForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-gray-800">Редактировать груз</h2>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Название</label>
+              <input
+                type="text"
+                value={editForm.name || ""}
+                onChange={(e) => handleEditChange('name', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Телефон / ID</label>
+              <input
+                type="text"
+                value={editForm.phone || ""}
+                onChange={(e) => handleEditChange('phone', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Номер стеллажа</label>
+              <input
+                type="text"
+                value={editForm.stillage || ""}
+                onChange={(e) => handleEditChange('stillage', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="font-bold text-sm text-gray-700">Кг</label>
+                <input
+                  type="text"
+                  value={editForm.kg || ""}
+                  onChange={(e) => handleEditChange('kg', e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="font-bold text-sm text-gray-700">Куб</label>
+                <input
+                  type="text"
+                  value={editForm.kub || ""}
+                  onChange={(e) => handleEditChange('kub', e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Итоговая сумма ($)</label>
+              <input
+                type="number"
+                value={editForm.totalPrice || ""}
+                onChange={(e) => handleEditChange('totalPrice', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-green-700"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Статус</label>
+              <select
+                value={editForm.status || "Принято"}
+                onChange={(e) => handleEditChange('status', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+              >
+                <option value="Принято">Принято</option>
+                <option value="В пути">В пути</option>
+                <option value="На складе">На складе</option>
+                <option value="Выдано">Выдано</option>
+              </select>
+            </div>
+
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => setEditForm(null)}
+                className="flex-1 bg-gray-200 text-gray-700 p-3 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleUpdateCargo}
+                className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
