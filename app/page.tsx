@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc, setDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, User, LogOut, Phone, Edit } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Download, LogOut, Edit } from "lucide-react";
 import * as XLSX from "xlsx";
 
 interface CargoList {
@@ -18,6 +18,7 @@ interface CargoItem {
   stillage: string;
   name: string;
   phone: string;
+  trackCodes?: string;
   kg: string;
   kub: string;
   status?: string;
@@ -44,6 +45,7 @@ export default function Home() {
   const [stillage, setStillage] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [trackCodes, setTrackCodes] = useState("");
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
@@ -130,7 +132,9 @@ export default function Home() {
     const matchName = item.name.toLowerCase().includes(q);
     const phoneStr = item.phone || "";
     const matchPhone = phoneStr.includes(q);
-    return matchName || matchPhone;
+    const trackStr = item.trackCodes || "";
+    const matchTrack = trackStr.toLowerCase().includes(q);
+    return matchName || matchPhone || matchTrack;
   });
 
   // Handlers
@@ -199,19 +203,6 @@ export default function Home() {
     }
   };
 
-  const handleSaveRates = async () => {
-    try {
-      await setDoc(doc(db, "settings", "rates"), {
-        ratePerKg,
-        ratePerVolume
-      }, { merge: true });
-      alert("Тарифы успешно сохранены!");
-    } catch (error) {
-      console.error("Error saving rates:", error);
-      alert("Ошибка при сохранении тарифов");
-    }
-  };
-
   const calculateTotalPrice = (w: string, v: string) => {
     const weightNum = parseFloat(w) || 0;
     const volNum = parseFloat(v) || 0;
@@ -250,7 +241,7 @@ export default function Home() {
       return;
     }
     if (!stillage || !name || !phone || !kg || !kub) {
-      alert("Please fill in all fields");
+      alert("Please fill in all required fields (Stillage, Name, Phone, Kg, Kub)");
       return;
     }
 
@@ -260,16 +251,24 @@ export default function Home() {
         stillage,
         name,
         phone,
+        trackCodes,
         kg,
         kub,
         status: "Принято",
         totalPrice: parseFloat(totalPrice) || 0,
         createdAt: new Date()
       });
-      alert("Saved successfully!");
-      setStillage("");
+      
+      const currentStillageNum = parseInt(stillage);
+      if (!isNaN(currentStillageNum)) {
+        setStillage(String(currentStillageNum + 1));
+      } else {
+        setStillage("");
+      }
+      
       setName("");
       setPhone("");
+      setTrackCodes("");
       setKg("");
       setKub("");
       setTotalPrice("");
@@ -314,6 +313,7 @@ export default function Home() {
       await updateDoc(doc(db, "cargo", editForm.id), {
         name: editForm.name,
         phone: editForm.phone,
+        trackCodes: editForm.trackCodes || "",
         stillage: editForm.stillage,
         kg: editForm.kg,
         kub: editForm.kub,
@@ -349,6 +349,7 @@ export default function Home() {
         "№": index + 1,
         "Название": item.name || "",
         "Телефон / ID": item.phone || "",
+        "Трек-коды": item.trackCodes || "",
         "Вес (кг)": item.kg || "",
         "Объём (куб)": item.kub || "",
         "Статус": item.status || "Принято",
@@ -364,6 +365,7 @@ export default function Home() {
       { wch: 5 },  // №
       { wch: 25 }, // Название
       { wch: 20 }, // Телефон / ID
+      { wch: 25 }, // Трек-коды
       { wch: 10 }, // Вес (кг)
       { wch: 15 }, // Объём (куб)
       { wch: 15 }, // Статус
@@ -382,7 +384,7 @@ export default function Home() {
   };
 
   if (authChecking) {
-    return <div className="min-h-screen bg-gray-50 flex justify-center items-center">Загрузка...</div>;
+    return <div className="min-h-screen bg-gray-50 flex justify-center items-center text-black">Загрузка...</div>;
   }
 
   if (!isAuthenticated) {
@@ -399,7 +401,7 @@ export default function Home() {
               placeholder="Email"
               value={loginEmail}
               onChange={(e) => setLoginEmail(e.target.value)}
-              className="border border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 w-full"
+              className="border border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 w-full text-black"
               required
             />
             <input
@@ -407,7 +409,7 @@ export default function Home() {
               placeholder="Пароль"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
-              className="border border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 w-full"
+              className="border border-gray-200 p-3 rounded-xl outline-none focus:border-blue-500 w-full text-black"
               required
             />
             <button type="submit" className="bg-blue-600 text-white font-bold p-3 rounded-xl w-full mt-2 hover:bg-blue-700 transition-colors">
@@ -422,7 +424,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Responsive container */}
-      <div className="w-full max-w-md md:max-w-6xl bg-gray-50 min-h-screen shadow-sm relative">
+      <div className="w-full max-w-md lg:max-w-[1400px] bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -437,13 +439,13 @@ export default function Home() {
         </header>
 
         {/* Main Content Area */}
-        <main className="p-6 flex flex-col gap-4">
+        <main className="p-4 lg:p-6 flex flex-col gap-4">
           {/* List Management */}
           <div className="bg-white rounded-xl p-4 shadow-sm flex flex-col gap-3 border border-gray-100">
             <p className="font-bold text-gray-700">📁 Выберите лист:</p>
             <div className="flex gap-2">
               <select
-                className="p-2 border border-gray-200 rounded-md flex-1 outline-none focus:border-blue-500"
+                className="p-2 border border-gray-200 rounded-md flex-1 outline-none focus:border-blue-500 text-black"
                 value={selectedListId}
                 onChange={(e) => setSelectedListId(e.target.value)}
               >
@@ -466,7 +468,7 @@ export default function Home() {
                 placeholder="➕ Новый лист"
                 value={newListName}
                 onChange={(e) => setNewListName(e.target.value)}
-                className="p-2 border border-gray-200 rounded-md flex-1 outline-none focus:border-blue-500"
+                className="p-2 border border-gray-200 rounded-md flex-1 outline-none focus:border-blue-500 text-black"
               />
               <button
                 onClick={handleAddList}
@@ -477,48 +479,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Global Rates (Hidden from UI but logic intact) */}
-          <div className="hidden">
-            <p className="font-bold text-gray-700">💰 Глобальные тарифы ($):</p>
-            <div className="flex gap-2">
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs font-bold text-gray-500">За кг</label>
-                <input
-                  type="number"
-                  value={ratePerKg}
-                  onChange={(e) => setRatePerKg(e.target.value)}
-                  className="p-2 border border-gray-200 rounded-md outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="text-xs font-bold text-gray-500">За куб</label>
-                <input
-                  type="number"
-                  value={ratePerVolume}
-                  onChange={(e) => setRatePerVolume(e.target.value)}
-                  className="p-2 border border-gray-200 rounded-md outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="flex flex-col justify-end">
-                <button
-                  onClick={handleSaveRates}
-                  className="bg-blue-600 rounded-md px-4 py-2 text-white font-bold hover:bg-blue-700 transition-colors"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-
           {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
             <Search className="text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Поиск по имени или последним 4 цифрам тел."
+              placeholder="Поиск по имени, тел, трек-коду"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-gray-700 text-sm"
+              className="flex-1 bg-transparent outline-none text-black text-sm"
             />
           </div>
 
@@ -532,81 +501,86 @@ export default function Home() {
           </button>
 
           {/* Data Entry Form */}
-          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col md:flex-row md:items-end gap-4 border border-gray-100">
-            {/* Field 1: Stillage */}
-            <div className="flex flex-col gap-1 w-full md:w-auto">
+          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col lg:flex-row lg:items-end gap-3 border border-gray-100">
+            <div className="flex flex-col gap-1 w-full lg:w-20">
               <label className="font-bold text-sm text-gray-700">Стеллаж</label>
               <input
                 type="text"
                 placeholder="65"
                 value={stillage}
                 onChange={(e) => setStillage(e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
-            {/* Field 2: Name */}
-            <div className="flex flex-col gap-1 w-full md:flex-1">
+            <div className="flex flex-col gap-1 w-full lg:flex-1">
               <label className="font-bold text-sm text-gray-700">Название</label>
               <input
                 type="text"
                 placeholder="Имя"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
-            {/* Field 3: Phone */}
-            <div className="flex flex-col gap-1 w-full md:flex-1">
+            <div className="flex flex-col gap-1 w-full lg:flex-1">
               <label className="font-bold text-sm text-gray-700">Код (Phone)</label>
               <input
                 type="text"
                 placeholder="+992 00 000 0000"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
-            {/* Field 4: Weight and Volume */}
-            <div className="flex gap-3 w-full md:w-auto">
-              <div className="flex flex-col gap-1 flex-1 md:w-20">
+            <div className="flex flex-col gap-1 w-full lg:flex-1">
+              <label className="font-bold text-sm text-gray-700">Трек-коды</label>
+              <input
+                type="text"
+                placeholder="Трек-код"
+                value={trackCodes}
+                onChange={(e) => setTrackCodes(e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+              />
+            </div>
+
+            <div className="flex gap-2 w-full lg:w-auto">
+              <div className="flex flex-col gap-1 flex-1 lg:w-16">
                 <label className="font-bold text-sm text-gray-700">Kg</label>
                 <input
                   type="text"
                   value={kg}
                   onChange={(e) => handleKgChange(e.target.value)}
-                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
                 />
               </div>
-              <div className="flex flex-col gap-1 flex-1 md:w-20">
+              <div className="flex flex-col gap-1 flex-1 lg:w-16">
                 <label className="font-bold text-sm text-gray-700">Kub</label>
                 <input
                   type="text"
                   value={kub}
                   onChange={(e) => handleKubChange(e.target.value)}
-                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
                 />
               </div>
             </div>
 
-            {/* Field 5: Total Price */}
-            <div className="flex flex-col gap-1 w-full md:w-28">
+            <div className="flex flex-col gap-1 w-full lg:w-24">
               <label className="font-bold text-sm text-gray-700">Сумма ($)</label>
               <input
                 type="number"
                 placeholder="0.00"
                 value={totalPrice}
                 onChange={(e) => setTotalPrice(e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-green-700"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-black"
               />
             </div>
 
-            {/* Save Button */}
             <button
               onClick={saveData}
-              className="bg-blue-600 text-white p-2 md:px-6 rounded-xl font-bold w-full md:w-auto md:h-[42px] hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white p-2 lg:px-6 rounded-xl font-bold w-full lg:w-auto lg:h-[42px] hover:bg-blue-700 transition-colors"
             >
               Сохранить
             </button>
@@ -620,13 +594,14 @@ export default function Home() {
             ) : (
               <>
                 {/* Desktop Table View */}
-                <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                  <table className="w-full text-sm text-left text-gray-700">
+                <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+                  <table className="w-full text-sm text-left text-gray-700 whitespace-nowrap">
                     <thead className="text-xs text-gray-500 bg-gray-50 uppercase">
                       <tr>
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">Название</th>
                         <th className="px-4 py-3">Код (Phone)</th>
+                        <th className="px-4 py-3">Трек-коды</th>
                         <th className="px-4 py-3">Стеллаж</th>
                         <th className="px-4 py-3">Kg</th>
                         <th className="px-4 py-3">Kub</th>
@@ -639,21 +614,22 @@ export default function Home() {
                       {filteredCargoList.map((item, idx) => (
                         <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
                           <td className="px-4 py-3">{idx + 1}</td>
-                          <td className="px-4 py-3 font-bold text-gray-900">{item.name}</td>
-                          <td className="px-4 py-3 font-mono">{item.phone}</td>
+                          <td className="px-4 py-3 font-bold text-black">{item.name}</td>
+                          <td className="px-4 py-3 text-black">{item.phone}</td>
+                          <td className="px-4 py-3 text-black max-w-[150px] truncate" title={item.trackCodes}>{item.trackCodes}</td>
                           <td className="px-4 py-3">
                             <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
                               {item.stillage}
                             </span>
                           </td>
-                          <td className="px-4 py-3">{item.kg}</td>
-                          <td className="px-4 py-3">{item.kub}</td>
-                          <td className="px-4 py-3 font-bold text-green-700">{item.totalPrice || 0}</td>
+                          <td className="px-4 py-3 text-black">{item.kg}</td>
+                          <td className="px-4 py-3 text-black">{item.kub}</td>
+                          <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0}</td>
                           <td className="px-4 py-3">
                             <select
                               value={item.status || "Принято"}
                               onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                              className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500 bg-transparent"
+                              className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500 bg-transparent text-black"
                             >
                               <option value="Принято">Принято</option>
                               <option value="В пути">В пути</option>
@@ -674,30 +650,33 @@ export default function Home() {
                 </div>
 
                 {/* Mobile Card View */}
-                <div className="md:hidden flex flex-col gap-3">
+                <div className="lg:hidden flex flex-col gap-3">
                   {filteredCargoList.map((item) => (
                     <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
-                        <span className="font-bold text-gray-800">{item.name}</span>
+                        <span className="font-bold text-black">{item.name}</span>
                         <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
                           Стеллаж: {item.stillage}
                         </span>
                       </div>
-                      {item.phone && (
-                        <div className="text-sm text-gray-500 font-mono">
-                          {item.phone}
+                      <div className="text-sm text-black">
+                        {item.phone}
+                      </div>
+                      {item.trackCodes && (
+                        <div className="text-sm text-black">
+                          Трек: {item.trackCodes}
                         </div>
                       )}
-                      <div className="flex gap-4 text-sm text-gray-600 mt-1 items-center">
+                      <div className="flex gap-4 text-sm text-black mt-1 items-center font-medium">
                         <span>{item.kg} Kg</span>
                         <span>{item.kub} Kub</span>
-                        <span className="font-bold text-green-700">{item.totalPrice || 0} $</span>
+                        <span className="font-bold">{item.totalPrice || 0} $</span>
                       </div>
                       <div className="mt-2 flex justify-between items-center">
                         <select
                           value={item.status || "Принято"}
                           onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                          className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500"
+                          className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500 text-black"
                         >
                           <option value="Принято">Принято</option>
                           <option value="В пути">В пути</option>
@@ -730,7 +709,7 @@ export default function Home() {
                 type="text"
                 value={editForm.name || ""}
                 onChange={(e) => handleEditChange('name', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
@@ -740,7 +719,17 @@ export default function Home() {
                 type="text"
                 value={editForm.phone || ""}
                 onChange={(e) => handleEditChange('phone', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Трек-коды</label>
+              <input
+                type="text"
+                value={editForm.trackCodes || ""}
+                onChange={(e) => handleEditChange('trackCodes', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
@@ -750,7 +739,7 @@ export default function Home() {
                 type="text"
                 value={editForm.stillage || ""}
                 onChange={(e) => handleEditChange('stillage', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
             </div>
 
@@ -761,7 +750,7 @@ export default function Home() {
                   type="text"
                   value={editForm.kg || ""}
                   onChange={(e) => handleEditChange('kg', e.target.value)}
-                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
                 />
               </div>
               <div className="flex flex-col gap-1 flex-1">
@@ -770,7 +759,7 @@ export default function Home() {
                   type="text"
                   value={editForm.kub || ""}
                   onChange={(e) => handleEditChange('kub', e.target.value)}
-                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
                 />
               </div>
             </div>
@@ -781,7 +770,7 @@ export default function Home() {
                 type="number"
                 value={editForm.totalPrice || ""}
                 onChange={(e) => handleEditChange('totalPrice', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-green-700"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 font-bold text-black"
               />
             </div>
 
@@ -790,7 +779,7 @@ export default function Home() {
               <select
                 value={editForm.status || "Принято"}
                 onChange={(e) => handleEditChange('status', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               >
                 <option value="Принято">Принято</option>
                 <option value="В пути">В пути</option>
