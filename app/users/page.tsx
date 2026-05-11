@@ -39,7 +39,7 @@ export default function UsersPanel() {
         fetchedLists.push({ id: doc.id, ...doc.data() } as CargoList);
       });
       setLists(fetchedLists);
-      
+
       if (fetchedLists.length > 0 && !selectedListId) {
         setSelectedListId(fetchedLists[0].id);
       } else if (fetchedLists.length === 0) {
@@ -75,7 +75,7 @@ export default function UsersPanel() {
   });
 
   const getStatusColor = (status?: string) => {
-    switch(status) {
+    switch (status) {
       case "Принято": return "bg-gray-200 text-gray-800";
       case "В пути": return "bg-yellow-100 text-yellow-800";
       case "На складе": return "bg-green-100 text-green-800";
@@ -95,7 +95,7 @@ export default function UsersPanel() {
         </h1>
 
         {/* Login Button */}
-        <button 
+        <button
           className="w-full bg-blue-600 rounded-xl p-3 text-white text-center font-bold hover:bg-blue-700 transition-colors"
           onClick={() => window.location.href = '/'}
         >
@@ -105,7 +105,7 @@ export default function UsersPanel() {
         {/* Sheet Selector */}
         <div className="flex flex-col gap-2">
           <p className="font-bold text-gray-700">📁 Выберите лист:</p>
-          <select 
+          <select
             className="border border-gray-200 rounded-md p-2 w-full bg-white outline-none focus:border-blue-500"
             value={selectedListId}
             onChange={(e) => setSelectedListId(e.target.value)}

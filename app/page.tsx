@@ -78,8 +78,8 @@ export default function Home() {
     const q = query(collection(db, "lists"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedLists: CargoList[] = [];
-      snapshot.forEach((doc) => {
-        fetchedLists.push({ id: doc.id, ...doc.data() } as CargoList);
+      snapshot.forEach((docSnap) => {
+        fetchedLists.push({ id: docSnap.id, ...docSnap.data() } as CargoList);
       });
       setLists(fetchedLists);
 
@@ -119,8 +119,8 @@ export default function Home() {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: CargoItem[] = [];
-      snapshot.forEach((doc) => {
-        items.push({ id: doc.id, ...doc.data() } as CargoItem);
+      snapshot.forEach((docSnap) => {
+        items.push({ id: docSnap.id, ...docSnap.data() } as CargoItem);
       });
       setCargoList(items);
     });
@@ -180,24 +180,19 @@ export default function Home() {
   const handleDeleteList = async () => {
     if (!selectedListId) return;
 
-    // Step 1 Confirmation
     const step1 = window.confirm("Вы уверены, что хотите удалить этот лист? Все данные в нем будут безвозвратно удалены!");
     if (!step1) return;
 
-    // Step 2 Confirmation
     const step2 = window.confirm("Это действие невозможно отменить! Вы точно уверены?");
     if (!step2) return;
 
     try {
-      // Find all cargo items associated with this list
       const q = query(collection(db, "cargo"), where("listId", "==", selectedListId));
       const querySnapshot = await getDocs(q);
 
-      // Delete each cargo item
       const deletePromises = querySnapshot.docs.map(docSnapshot => deleteDoc(doc(db, "cargo", docSnapshot.id)));
       await Promise.all(deletePromises);
 
-      // Delete the list itself
       await deleteDoc(doc(db, "lists", selectedListId));
       alert("Лист и все его данные успешно удалены.");
     } catch (error) {
@@ -298,7 +293,6 @@ export default function Home() {
       if (!prev) return prev;
       const updated = { ...prev, [field]: value };
 
-      // Auto-calculate total price if kg or kub changed
       if (field === 'kg' || field === 'kub') {
         const w = parseFloat(field === 'kg' ? value : (updated.kg || "0")) || 0;
         const v = parseFloat(field === 'kub' ? value : (updated.kub || "0")) || 0;
@@ -342,7 +336,6 @@ export default function Home() {
       let dateStr = "";
       if (item.createdAt?.toDate) {
         const d = item.createdAt.toDate();
-        // Add padding to ensure DD.MM.YYYY format exactly
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
@@ -364,17 +357,16 @@ export default function Home() {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
 
-    // Auto-width for columns
     const cols = [
-      { wch: 5 },  // №
-      { wch: 25 }, // Название
-      { wch: 20 }, // Телефон / ID
-      { wch: 25 }, // Трек-коды
-      { wch: 10 }, // Вес (кг)
-      { wch: 15 }, // Объём (куб)
-      { wch: 15 }, // Статус
-      { wch: 12 }, // Сумма ($)
-      { wch: 15 }, // Дата
+      { wch: 5 },
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 12 },
+      { wch: 15 },
     ];
     worksheet["!cols"] = cols;
 
@@ -427,7 +419,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
-      {/* Responsive container */}
+      {/* Responsive container: Mobile is max-w-md, Desktop is lg:max-w-[1400px] */}
       <div className="w-full max-w-md lg:max-w-[1400px] bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
@@ -506,7 +498,7 @@ export default function Home() {
 
           {/* Data Entry Form */}
           <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col lg:flex-row lg:items-end gap-3 border border-gray-100">
-            <div className="flex flex-col gap-1 w-full lg:w-20">
+            <div className="flex flex-col gap-1 w-full lg:w-24">
               <label className="font-bold text-sm text-gray-700">Стеллаж</label>
               <input
                 type="text"
@@ -571,7 +563,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-1 w-full lg:w-24">
+            <div className="flex flex-col gap-1 w-full lg:w-28">
               <label className="font-bold text-sm text-gray-700">Сумма ($)</label>
               <input
                 type="number"
@@ -597,21 +589,21 @@ export default function Home() {
               <p className="text-gray-500 text-sm px-1">Список пуст или не найдено</p>
             ) : (
               <>
-                {/* Desktop Table View */}
+                {/* Desktop HTML Table View - Only visible on lg screens */}
                 <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
                   <table className="w-full text-sm text-left text-gray-700 whitespace-nowrap">
                     <thead className="text-xs text-gray-500 bg-gray-50 uppercase">
                       <tr>
-                        <th className="px-4 py-3">#</th>
-                        <th className="px-4 py-3">Название</th>
-                        <th className="px-4 py-3">Код (Phone)</th>
-                        <th className="px-4 py-3">Трек-коды</th>
-                        <th className="px-4 py-3">Стеллаж</th>
-                        <th className="px-4 py-3">Kg</th>
-                        <th className="px-4 py-3">Kub</th>
-                        <th className="px-4 py-3">Сумма ($)</th>
-                        <th className="px-4 py-3">Статус</th>
-                        <th className="px-4 py-3 text-right">Действия</th>
+                        <th className="px-4 py-3 border-b">#</th>
+                        <th className="px-4 py-3 border-b">Название</th>
+                        <th className="px-4 py-3 border-b">Код (Phone)</th>
+                        <th className="px-4 py-3 border-b">Трек-коды</th>
+                        <th className="px-4 py-3 border-b">Стеллаж</th>
+                        <th className="px-4 py-3 border-b">Kg</th>
+                        <th className="px-4 py-3 border-b">Kub</th>
+                        <th className="px-4 py-3 border-b">Сумма ($)</th>
+                        <th className="px-4 py-3 border-b">Статус</th>
+                        <th className="px-4 py-3 border-b text-right">Действия</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -653,7 +645,7 @@ export default function Home() {
                   </table>
                 </div>
 
-                {/* Mobile Card View */}
+                {/* Mobile Card View - Only visible on small screens */}
                 <div className="lg:hidden flex flex-col gap-3">
                   {filteredCargoList.map((item) => (
                     <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
