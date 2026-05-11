@@ -421,8 +421,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
-      {/* Mobile-sized container */}
-      <div className="w-full max-w-md bg-gray-50 min-h-screen shadow-sm relative">
+      {/* Responsive container */}
+      <div className="w-full max-w-md md:max-w-6xl bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -477,8 +477,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Global Rates */}
-          <div className="bg-white rounded-xl p-4 shadow-sm flex flex-col gap-3 border border-gray-100">
+          {/* Global Rates (Hidden from UI but logic intact) */}
+          <div className="hidden">
             <p className="font-bold text-gray-700">💰 Глобальные тарифы ($):</p>
             <div className="flex gap-2">
               <div className="flex flex-col gap-1 flex-1">
@@ -532,10 +532,10 @@ export default function Home() {
           </button>
 
           {/* Data Entry Form */}
-          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col gap-4 border border-gray-100">
+          <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col md:flex-row md:items-end gap-4 border border-gray-100">
             {/* Field 1: Stillage */}
-            <div className="flex flex-col gap-1">
-              <label className="font-bold text-sm text-gray-700">№ Номер стеллажа</label>
+            <div className="flex flex-col gap-1 w-full md:w-auto">
+              <label className="font-bold text-sm text-gray-700">Стеллаж</label>
               <input
                 type="text"
                 placeholder="65"
@@ -546,14 +546,11 @@ export default function Home() {
             </div>
 
             {/* Field 2: Name */}
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-1 font-bold text-sm text-gray-700">
-                <User size={16} />
-                Название
-              </label>
+            <div className="flex flex-col gap-1 w-full md:flex-1">
+              <label className="font-bold text-sm text-gray-700">Название</label>
               <input
                 type="text"
-                placeholder="Введите имя"
+                placeholder="Имя"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
@@ -561,11 +558,8 @@ export default function Home() {
             </div>
 
             {/* Field 3: Phone */}
-            <div className="flex flex-col gap-1">
-              <label className="flex items-center gap-1 font-bold text-sm text-gray-700">
-                <Phone size={16} />
-                Phone Number / Client ID
-              </label>
+            <div className="flex flex-col gap-1 w-full md:flex-1">
+              <label className="font-bold text-sm text-gray-700">Код (Phone)</label>
               <input
                 type="text"
                 placeholder="+992 00 000 0000"
@@ -576,9 +570,9 @@ export default function Home() {
             </div>
 
             {/* Field 4: Weight and Volume */}
-            <div className="flex gap-3">
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="font-bold text-sm text-gray-700">Кг</label>
+            <div className="flex gap-3 w-full md:w-auto">
+              <div className="flex flex-col gap-1 flex-1 md:w-20">
+                <label className="font-bold text-sm text-gray-700">Kg</label>
                 <input
                   type="text"
                   value={kg}
@@ -586,8 +580,8 @@ export default function Home() {
                   className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500"
                 />
               </div>
-              <div className="flex flex-col gap-1 flex-1">
-                <label className="font-bold text-sm text-gray-700">Куб</label>
+              <div className="flex flex-col gap-1 flex-1 md:w-20">
+                <label className="font-bold text-sm text-gray-700">Kub</label>
                 <input
                   type="text"
                   value={kub}
@@ -598,8 +592,8 @@ export default function Home() {
             </div>
 
             {/* Field 5: Total Price */}
-            <div className="flex flex-col gap-1">
-              <label className="font-bold text-sm text-gray-700">Итоговая сумма ($)</label>
+            <div className="flex flex-col gap-1 w-full md:w-28">
+              <label className="font-bold text-sm text-gray-700">Сумма ($)</label>
               <input
                 type="number"
                 placeholder="0.00"
@@ -612,9 +606,9 @@ export default function Home() {
             {/* Save Button */}
             <button
               onClick={saveData}
-              className="bg-blue-600 text-white p-3 rounded-xl font-bold mt-2 w-full hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white p-2 md:px-6 rounded-xl font-bold w-full md:w-auto md:h-[42px] hover:bg-blue-700 transition-colors"
             >
-              Сохранить данные
+              Сохранить
             </button>
           </div>
 
@@ -624,56 +618,101 @@ export default function Home() {
             {filteredCargoList.length === 0 ? (
               <p className="text-gray-500 text-sm px-1">Список пуст или не найдено</p>
             ) : (
-              filteredCargoList.map((item) => (
-                <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex justify-between items-center gap-4">
-                  <div className="flex flex-col flex-1 gap-1">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold text-gray-800">{item.name}</span>
-                      <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
-                        Стеллаж: {item.stillage}
-                      </span>
-                    </div>
-                    {item.phone && (
-                      <div className="text-sm text-gray-500 font-mono">
-                        📞 {item.phone}
-                      </div>
-                    )}
-                    <div className="flex gap-4 text-sm text-gray-600 mt-1 items-center">
-                      <span>⚖️ {item.kg} кг</span>
-                      <span>📦 {item.kub} куб</span>
-                      <span className="font-bold text-green-700">💰 {item.totalPrice || 0} $</span>
-                    </div>
-                    <div className="mt-2">
-                      <select
-                        value={item.status || "Принято"}
-                        onChange={(e) => handleStatusChange(item.id, e.target.value)}
-                        className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500"
-                      >
-                        <option value="Принято">Принято</option>
-                        <option value="В пути">В пути</option>
-                        <option value="На складе">На складе</option>
-                        <option value="Выдано">Выдано</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 h-fit self-start">
-                    <button
-                      onClick={() => setEditForm(item)}
-                      className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors"
-                      title="Редактировать"
-                    >
-                      <Edit className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCargo(item.id)}
-                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                      title="Удалить"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <table className="w-full text-sm text-left text-gray-700">
+                    <thead className="text-xs text-gray-500 bg-gray-50 uppercase">
+                      <tr>
+                        <th className="px-4 py-3">#</th>
+                        <th className="px-4 py-3">Название</th>
+                        <th className="px-4 py-3">Код (Phone)</th>
+                        <th className="px-4 py-3">Стеллаж</th>
+                        <th className="px-4 py-3">Kg</th>
+                        <th className="px-4 py-3">Kub</th>
+                        <th className="px-4 py-3">Сумма ($)</th>
+                        <th className="px-4 py-3">Статус</th>
+                        <th className="px-4 py-3 text-right">Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCargoList.map((item, idx) => (
+                        <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
+                          <td className="px-4 py-3">{idx + 1}</td>
+                          <td className="px-4 py-3 font-bold text-gray-900">{item.name}</td>
+                          <td className="px-4 py-3 font-mono">{item.phone}</td>
+                          <td className="px-4 py-3">
+                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
+                              {item.stillage}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">{item.kg}</td>
+                          <td className="px-4 py-3">{item.kub}</td>
+                          <td className="px-4 py-3 font-bold text-green-700">{item.totalPrice || 0}</td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={item.status || "Принято"}
+                              onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                              className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500 bg-transparent"
+                            >
+                              <option value="Принято">Принято</option>
+                              <option value="В пути">В пути</option>
+                              <option value="На складе">На складе</option>
+                              <option value="Выдано">Выдано</option>
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex gap-3 justify-end text-sm">
+                              <button onClick={() => setEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
+                              <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))
+
+                {/* Mobile Card View */}
+                <div className="md:hidden flex flex-col gap-3">
+                  {filteredCargoList.map((item) => (
+                    <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-gray-800">{item.name}</span>
+                        <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
+                          Стеллаж: {item.stillage}
+                        </span>
+                      </div>
+                      {item.phone && (
+                        <div className="text-sm text-gray-500 font-mono">
+                          {item.phone}
+                        </div>
+                      )}
+                      <div className="flex gap-4 text-sm text-gray-600 mt-1 items-center">
+                        <span>{item.kg} Kg</span>
+                        <span>{item.kub} Kub</span>
+                        <span className="font-bold text-green-700">{item.totalPrice || 0} $</span>
+                      </div>
+                      <div className="mt-2 flex justify-between items-center">
+                        <select
+                          value={item.status || "Принято"}
+                          onChange={(e) => handleStatusChange(item.id, e.target.value)}
+                          className="text-sm p-1 border border-gray-200 rounded outline-none focus:border-blue-500"
+                        >
+                          <option value="Принято">Принято</option>
+                          <option value="В пути">В пути</option>
+                          <option value="На складе">На складе</option>
+                          <option value="Выдано">Выдано</option>
+                        </select>
+                        <div className="flex gap-3 text-sm">
+                          <button onClick={() => setEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
+                          <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </main>
