@@ -54,7 +54,7 @@ export default function Home() {
   const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
 
   // Cargo Data and Search
-  const [cargoList, setCargoList] = useState<CargoItem[]>([]);
+  const [cargos, setCargos] = useState<CargoItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Auth Effect
@@ -104,14 +104,13 @@ export default function Home() {
     return () => unsubscribe();
   }, [isAuthenticated]);
 
-  // Fetch Cargo Items for Selected List
+  // Debug Fetch: Fetch all cargo items to check data
   useEffect(() => {
-    if (!isAuthenticated || !selectedListId) return;
+    if (!isAuthenticated) return;
 
-    // We only fetch cargo for the current list to keep it efficient
+    console.log("Fetching all cargo items for debug...");
     const q = query(
       collection(db, "cargo"),
-      where("listId", "==", selectedListId),
       orderBy("createdAt", "desc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -119,14 +118,15 @@ export default function Home() {
       snapshot.forEach((docSnap) => {
         items.push({ id: docSnap.id, ...docSnap.data() } as CargoItem);
       });
-      setCargoList(items);
+      console.log("DEBUG - Received Cargo Items:", items);
+      setCargos(items);
     });
     return () => unsubscribe();
-  }, [isAuthenticated, selectedListId]);
+  }, [isAuthenticated]);
 
   // Derived filtered cargo list
-  const filteredCargoList = cargoList.filter((item) => {
-    if (item.listId !== selectedListId) return false;
+  const filteredCargoList = cargos.filter((item) => {
+    // if (item.listId !== selectedListId) return false; // Temporarily disabled for debugging
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const matchName = item.name.toLowerCase().includes(q);
@@ -414,7 +414,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center">
+    <div className="min-h-screen bg-gray-50 flex justify-center text-black">
       {/* Responsive container: Mobile is max-w-md, Desktop is lg:max-w-[1400px] */}
       <div className="w-full max-w-md lg:max-w-[1400px] bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
@@ -482,15 +482,6 @@ export default function Home() {
               className="flex-1 bg-transparent outline-none text-black text-sm"
             />
           </div>
-
-          {/* Export Button */}
-          <button
-            onClick={handleExportExcel}
-            className="w-full bg-green-600 text-white p-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors"
-          >
-            <Download className="w-5 h-5" />
-            Экспорт в Excel
-          </button>
 
           {/* Data Entry Form */}
           <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col lg:flex-row lg:items-end gap-3 border border-gray-100">
@@ -578,9 +569,20 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Cargo List */}
+          {/* Cargo List Section */}
           <div className="flex flex-col gap-3">
-            <h2 className="font-bold text-gray-800 text-lg px-1">Список грузов</h2>
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-1">
+              <h2 className="font-bold text-gray-800 text-lg">Список грузов</h2>
+              {/* Export Button moved above the table */}
+              <button
+                onClick={handleExportExcel}
+                className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors w-full lg:w-auto"
+              >
+                <Download className="w-5 h-5" />
+                Экспорт в Excel
+              </button>
+            </div>
+
             {filteredCargoList.length === 0 ? (
               <p className="text-gray-500 text-sm px-1">Список пуст или не найдено</p>
             ) : (
@@ -590,16 +592,16 @@ export default function Home() {
                   <table className="w-full text-sm text-left text-gray-700 whitespace-nowrap">
                     <thead className="text-xs text-gray-500 bg-gray-50 uppercase">
                       <tr>
-                        <th className="px-4 py-3 border-b">#</th>
-                        <th className="px-4 py-3 border-b">Название</th>
-                        <th className="px-4 py-3 border-b">Код (Phone)</th>
-                        <th className="px-4 py-3 border-b">Трек-коды</th>
-                        <th className="px-4 py-3 border-b">Стеллаж</th>
-                        <th className="px-4 py-3 border-b">Kg</th>
-                        <th className="px-4 py-3 border-b">Kub</th>
-                        <th className="px-4 py-3 border-b">Сумма ($)</th>
-                        <th className="px-4 py-3 border-b">Статус</th>
-                        <th className="px-4 py-3 border-b text-right">Действия</th>
+                        <th className="px-4 py-3 border-b">№</th>
+                        <th className="px-4 py-3 border-b">Name</th>
+                        <th className="px-4 py-3 border-b">Phone</th>
+                        <th className="px-4 py-3 border-b">Track Code</th>
+                        <th className="px-4 py-3 border-b">Stillage</th>
+                        <th className="px-4 py-3 border-b">Weight</th>
+                        <th className="px-4 py-3 border-b">Volume</th>
+                        <th className="px-4 py-3 border-b">Status</th>
+                        <th className="px-4 py-3 border-b">Price</th>
+                        <th className="px-4 py-3 border-b text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -616,7 +618,6 @@ export default function Home() {
                           </td>
                           <td className="px-4 py-3 text-black">{item.kg}</td>
                           <td className="px-4 py-3 text-black">{item.kub}</td>
-                          <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0}</td>
                           <td className="px-4 py-3">
                             <select
                               value={item.status || "Принято"}
@@ -629,6 +630,7 @@ export default function Home() {
                               <option value="Выдано">Выдано</option>
                             </select>
                           </td>
+                          <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0} $</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex gap-3 justify-end text-sm">
                               <button onClick={() => setEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
