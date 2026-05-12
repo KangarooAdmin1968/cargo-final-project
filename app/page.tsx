@@ -34,7 +34,7 @@ export default function Home() {
 
   // List States
   const [lists, setLists] = useState<CargoList[]>([]);
-  const [selectedListId, setSelectedListId] = useState("");
+  const [selectedListId, setSelectedListId] = useState("all");
   const [newListName, setNewListName] = useState("");
 
   // Rates States
@@ -55,7 +55,23 @@ export default function Home() {
 
   // Cargo Data and Search
   const [cargos, setCargos] = useState<CargoItem[]>([]);
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const nextStillage = cargos.length + 1;
+
+  // Auto-increment Stillage logic: Update state whenever the calculated nextStillage changes
+  useEffect(() => {
+    setStillage(String(nextStillage));
+  }, [nextStillage]);
 
   // Auth Effect
   useEffect(() => {
@@ -81,11 +97,9 @@ export default function Home() {
       });
       setLists(fetchedLists);
 
-      // Auto-select first list if nothing selected
+      // Auto-select "all" by default as per state initialization
       if (fetchedLists.length > 0 && !selectedListId) {
-        setSelectedListId(fetchedLists[0].id);
-      } else if (fetchedLists.length === 0) {
-        setSelectedListId("");
+        setSelectedListId("all");
       }
     });
     return () => unsubscribe();
@@ -104,29 +118,37 @@ export default function Home() {
     return () => unsubscribe();
   }, [isAuthenticated]);
 
-  // Debug Fetch: Fetch all cargo items to check data
+  // Fetch Cargo Items for Selected List - Sorted Ascending
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !selectedListId) return;
 
-    console.log("Fetching all cargo items for debug...");
-    const q = query(
-      collection(db, "cargo"),
-      orderBy("createdAt", "desc")
-    );
+    let q;
+    if (selectedListId !== "all") {
+      q = query(
+        collection(db, "cargo"),
+        where("listId", "==", selectedListId),
+        orderBy("createdAt", "asc")
+      );
+    } else {
+      q = query(
+        collection(db, "cargo"),
+        orderBy("createdAt", "asc")
+      );
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items: CargoItem[] = [];
       snapshot.forEach((docSnap) => {
         items.push({ id: docSnap.id, ...docSnap.data() } as CargoItem);
       });
-      console.log("DEBUG - Received Cargo Items:", items);
       setCargos(items);
     });
     return () => unsubscribe();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedListId]);
 
   // Derived filtered cargo list
   const filteredCargoList = cargos.filter((item) => {
-    // if (item.listId !== selectedListId) return false; // Temporarily disabled for debugging
+    if (selectedListId !== "all" && item.listId !== selectedListId) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const matchName = item.name.toLowerCase().includes(q);
@@ -175,7 +197,7 @@ export default function Home() {
   };
 
   const handleDeleteList = async () => {
-    if (!selectedListId) return;
+    if (!selectedListId || selectedListId === "all") return;
 
     const step1 = window.confirm("Вы уверены, что хотите удалить этот лист? Все данные в нем будут безвозвратно удалены!");
     if (!step1) return;
@@ -192,6 +214,7 @@ export default function Home() {
 
       await deleteDoc(doc(db, "lists", selectedListId));
       alert("Лист и все его данные успешно удалены.");
+      setSelectedListId("all");
     } catch (error) {
       console.error("Error deleting list:", error);
       alert("Ошибка при удалении листа");
@@ -231,36 +254,49 @@ export default function Home() {
   };
 
   const saveData = async () => {
-    if (!selectedListId) {
-      alert("Пожалуйста, выберите или создайте лист перед сохранением");
-      return;
+    let targetListId = selectedListId;
+
+    if (!targetListId || targetListId === "all") {
+      if (lists.length > 0) {
+        targetListId = lists[0].id;
+      } else {
+        alert("Сначала создайте хотя бы один лист");
+        return;
+      }
     }
-    if (!stillage || !name || !phone || !kg || !kub) {
-      alert("Please fill in all required fields (Stillage, Name, Phone, Kg, Kub)");
+
+    // Kg and Kub are now optional
+    if (!stillage || !name || !phone) {
+      alert("Пожалуйста, заполните обязательные поля (Стеллаж, Название, Код/Телефон)");
       return;
     }
 
     try {
-      await addDoc(collection(db, "cargo"), {
-        listId: selectedListId,
+      const newCargoData = {
+        listId: targetListId,
         stillage,
         name,
         phone,
         trackCodes,
-        kg,
-        kub,
+        kg: kg || "0",
+        kub: kub || "0",
         status: "Принято",
         totalPrice: parseFloat(totalPrice) || 0,
         createdAt: new Date()
-      });
+      };
 
-      const currentStillageNum = parseInt(stillage);
-      if (!isNaN(currentStillageNum)) {
-        setStillage(String(currentStillageNum + 1));
-      } else {
-        setStillage("");
-      }
+      const docRef = await addDoc(collection(db, "cargo"), newCargoData);
 
+      // Instant UI update: Manually append the new item to the state
+      const newItem: CargoItem = {
+        id: docRef.id,
+        ...newCargoData,
+        createdAt: { toDate: () => newCargoData.createdAt } // Mocking Firestore Timestamp for immediate display
+      };
+
+      setCargos((prev) => [...prev, newItem]);
+
+      // Reset form fields
       setName("");
       setPhone("");
       setTrackCodes("");
@@ -269,7 +305,7 @@ export default function Home() {
       setTotalPrice("");
     } catch (error) {
       console.error("Error adding document: ", error);
-      alert("Error saving data");
+      alert("Ошибка при сохранении данных");
     }
   };
 
@@ -309,8 +345,8 @@ export default function Home() {
         phone: editForm.phone,
         trackCodes: editForm.trackCodes || "",
         stillage: editForm.stillage,
-        kg: editForm.kg,
-        kub: editForm.kub,
+        kg: editForm.kg || "0",
+        kub: editForm.kub || "0",
         status: editForm.status,
         totalPrice: parseFloat(String(editForm.totalPrice)) || 0
       });
@@ -357,7 +393,7 @@ export default function Home() {
       { wch: 5 },
       { wch: 25 },
       { wch: 20 },
-      { wch: 25 },
+      { wch: 40 },
       { wch: 10 },
       { wch: 15 },
       { wch: 15 },
@@ -415,7 +451,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center text-black">
-      {/* Responsive container: Mobile is max-w-md, Desktop is lg:max-w-[1400px] */}
       <div className="w-full max-w-md lg:max-w-[1400px] bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
@@ -441,14 +476,14 @@ export default function Home() {
                 value={selectedListId}
                 onChange={(e) => setSelectedListId(e.target.value)}
               >
-                {lists.length === 0 && <option value="">Нет листов</option>}
+                <option value="all">Все листы</option>
                 {lists.map(list => (
                   <option key={list.id} value={list.id}>{list.name}</option>
                 ))}
               </select>
               <button
                 onClick={handleDeleteList}
-                disabled={!selectedListId}
+                disabled={!selectedListId || selectedListId === "all"}
                 className="bg-red-500 rounded-md p-2 flex justify-center disabled:opacity-50 hover:bg-red-600 transition-colors"
                 title="Удалить выбранный лист"
               >
@@ -477,8 +512,8 @@ export default function Home() {
             <input
               type="text"
               placeholder="Поиск по имени, тел, трек-коду"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="flex-1 bg-transparent outline-none text-black text-sm"
             />
           </div>
@@ -573,7 +608,6 @@ export default function Home() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-1">
               <h2 className="font-bold text-gray-800 text-lg">Список грузов</h2>
-              {/* Export Button moved above the table */}
               <button
                 onClick={handleExportExcel}
                 className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-green-700 transition-colors w-full lg:w-auto"
@@ -595,7 +629,7 @@ export default function Home() {
                         <th className="px-4 py-3 border-b">№</th>
                         <th className="px-4 py-3 border-b">Name</th>
                         <th className="px-4 py-3 border-b">Phone</th>
-                        <th className="px-4 py-3 border-b">Track Code</th>
+                        <th className="px-4 py-3 border-b">Track Codes</th>
                         <th className="px-4 py-3 border-b">Stillage</th>
                         <th className="px-4 py-3 border-b">Weight</th>
                         <th className="px-4 py-3 border-b">Volume</th>
@@ -719,11 +753,11 @@ export default function Home() {
 
             <div className="flex flex-col gap-1">
               <label className="font-bold text-sm text-gray-700">Трек-коды</label>
-              <input
-                type="text"
+              <textarea
                 value={editForm.trackCodes || ""}
                 onChange={(e) => handleEditChange('trackCodes', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-32"
+                placeholder="Сканируйте или введите трек-коды..."
               />
             </div>
 
