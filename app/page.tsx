@@ -57,6 +57,7 @@ export default function Home() {
   const [cargos, setCargos] = useState<CargoItem[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Search Debounce
   useEffect(() => {
@@ -272,6 +273,7 @@ export default function Home() {
     }
 
     try {
+      setIsSubmitting(true);
       const newCargoData = {
         listId: targetListId,
         stillage,
@@ -285,16 +287,7 @@ export default function Home() {
         createdAt: new Date()
       };
 
-      const docRef = await addDoc(collection(db, "cargo"), newCargoData);
-
-      // Instant UI update: Manually append the new item to the state
-      const newItem: CargoItem = {
-        id: docRef.id,
-        ...newCargoData,
-        createdAt: { toDate: () => newCargoData.createdAt } // Mocking Firestore Timestamp for immediate display
-      };
-
-      setCargos((prev) => [...prev, newItem]);
+      await addDoc(collection(db, "cargo"), newCargoData);
 
       // Reset form fields
       setName("");
@@ -306,6 +299,8 @@ export default function Home() {
     } catch (error) {
       console.error("Error adding document: ", error);
       alert("Ошибка при сохранении данных");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -598,9 +593,10 @@ export default function Home() {
 
             <button
               onClick={saveData}
-              className="bg-blue-600 text-white p-2 lg:px-6 rounded-xl font-bold w-full lg:w-auto lg:h-[42px] hover:bg-blue-700 transition-colors"
+              disabled={isSubmitting}
+              className="bg-blue-600 text-white p-2 lg:px-6 rounded-xl font-bold w-full lg:w-auto lg:h-[42px] hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              Сохранить
+              {isSubmitting ? "Сохранение..." : "Сохранить"}
             </button>
           </div>
 
