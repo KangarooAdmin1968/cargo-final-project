@@ -110,7 +110,7 @@ export default function UsersPanel() {
         <div className="flex flex-col gap-2">
           <p className="font-bold text-gray-700">📁 Выберите лист:</p>
           <select
-            className="border border-gray-200 rounded-md p-2 w-full bg-white outline-none focus:border-blue-500"
+            className="border border-gray-200 rounded-md p-2 w-full bg-white outline-none focus:border-blue-500 text-gray-900 font-semibold"
             value={selectedListId}
             onChange={(e) => setSelectedListId(e.target.value)}
           >
@@ -127,7 +127,7 @@ export default function UsersPanel() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Поиск по имени или последним 4 цифрам тел."
-          className="bg-white border border-gray-200 rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500"
+          className="bg-white border border-gray-200 rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500 text-gray-900"
         />
 
         {/* Mobile View: Data Cards (Hidden on Large Screens) */}
