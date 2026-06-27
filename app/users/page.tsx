@@ -90,15 +90,15 @@ export default function UsersPanel() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
-      {/* Main container */}
+      {/* Асосий контейнер */}
       <div className="w-full max-w-5xl bg-gray-50 min-h-screen flex flex-col gap-4 p-4">
 
-        {/* Header */}
+        {/* Сарлавҳа */}
         <h1 className="text-center font-bold text-xl mt-4 text-gray-800">
           Users Panel
         </h1>
 
-        {/* Login Button */}
+        {/* Админ панелга ўтиш тугмаси */}
         <button
           className="w-full bg-blue-600 rounded-xl p-3 text-white text-center font-bold hover:bg-blue-700 transition-colors"
           onClick={() => window.location.href = '/'}
@@ -106,7 +106,7 @@ export default function UsersPanel() {
           Вход в Админ панель
         </button>
 
-        {/* Sheet Selector */}
+        {/* Лист танлаш */}
         <div className="flex flex-col gap-2">
           <p className="font-bold text-gray-700">📁 Выберите лист:</p>
           <select
@@ -121,7 +121,7 @@ export default function UsersPanel() {
           </select>
         </div>
 
-        {/* Search Bar */}
+        {/* Қидирув ойнаси */}
         <input
           type="text"
           value={searchQuery}
@@ -130,7 +130,7 @@ export default function UsersPanel() {
           className="bg-white border border-gray-200 rounded-xl p-3 w-full shadow-sm outline-none focus:border-blue-500 text-gray-900"
         />
 
-        {/* Mobile View: Data Cards (Hidden on Large Screens) */}
+        {/* Мобил телефонлар учун карточкалар */}
         <div className="flex flex-col gap-3 mt-2 lg:hidden">
           {filteredCargoList.length === 0 ? (
             <p className="text-center text-gray-500">Нет данных</p>
@@ -163,7 +163,7 @@ export default function UsersPanel() {
           )}
         </div>
 
-        {/* Desktop View: Table (Hidden on Mobile) */}
+        {/* Компьютер экранлари учун жадвал */}
         <div className="hidden lg:block mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="w-full border-collapse text-left">
             <thead>
@@ -209,8 +209,22 @@ export default function UsersPanel() {
           </table>
         </div>
 
+        {/* ЯНГИ ҚЎШИЛГАН ДЕВАЛОПЕР ФУТЕРИ (Пастки қисм) */}
+        <footer className="w-full bg-white rounded-xl border border-gray-200 py-6 px-4 text-center mt-auto shadow-sm">
+          <div className="flex flex-col items-center justify-center gap-2">
+            <p className="text-sm md:text-base text-gray-600 font-medium">
+              Хотите такую же профессиональную систему для управления карго?
+            </p>
+            <p className="text-xs md:text-sm text-gray-500">
+              Свяжитесь с разработчиком:{" "}
+              <span className="font-bold text-blue-600 whitespace-nowrap">Усар Дусарович</span>{" "}
+              <span className="font-semibold text-gray-700 whitespace-nowrap">(+992 93 900 0049,</span>{" "}
+              <span className="font-semibold text-gray-700 whitespace-nowrap">+992 90 041 4777)</span>
+            </p>
+          </div>
+        </footer>
+
       </div>
     </div>
   );
 }
-

@@ -23,6 +23,7 @@ interface CargoItem {
   kub: string;
   status?: string;
   totalPrice?: number;
+  receivedBy?: string;
   createdAt: { toDate?: () => Date } | null;
 }
 
@@ -49,6 +50,7 @@ export default function Home() {
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
+  const [receivedBy, setReceivedBy] = useState("");
 
   // Edit Form States
   const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
@@ -284,6 +286,7 @@ export default function Home() {
         kub: kub || "0",
         status: "Принято",
         totalPrice: parseFloat(totalPrice) || 0,
+        receivedBy,
         createdAt: new Date()
       };
 
@@ -296,6 +299,7 @@ export default function Home() {
       setKg("");
       setKub("");
       setTotalPrice("");
+      setReceivedBy("");
     } catch (error) {
       console.error("Error adding document: ", error);
       alert("Ошибка при сохранении данных");
@@ -343,7 +347,8 @@ export default function Home() {
         kg: editForm.kg || "0",
         kub: editForm.kub || "0",
         status: editForm.status,
-        totalPrice: parseFloat(String(editForm.totalPrice)) || 0
+        totalPrice: parseFloat(String(editForm.totalPrice)) || 0,
+        receivedBy: editForm.receivedBy || ""
       });
       alert("Обновлено успешно!");
       setEditForm(null);
@@ -377,10 +382,32 @@ export default function Home() {
         "Вес (кг)": item.kg || "",
         "Объём (куб)": item.kub || "",
         "Статус": item.status || "Принято",
+        "Получил": item.receivedBy || "",
         "Сумма ($)": item.totalPrice || 0,
         "Дата": dateStr,
       };
     });
+
+    let aliyor = 0;
+    let khudoyberdi = 0;
+    let ozod = 0;
+    let unpaid = 0;
+
+    filteredCargoList.forEach(item => {
+      const price = item.totalPrice || 0;
+      if (item.receivedBy === "Алиёр") aliyor += price;
+      else if (item.receivedBy === "Худойберди") khudoyberdi += price;
+      else if (item.receivedBy === "Озод") ozod += price;
+      else unpaid += price;
+    });
+
+    exportData.push({} as any);
+    exportData.push({} as any);
+
+    exportData.push({ "Статус": "Всего собрал Алиёр:", "Сумма ($)": aliyor } as any);
+    exportData.push({ "Статус": "Всего собрал Худойберди:", "Сумма ($)": khudoyberdi } as any);
+    exportData.push({ "Статус": "Всего собрал Озод:", "Сумма ($)": ozod } as any);
+    exportData.push({ "Статус": "Всего не оплачено:", "Сумма ($)": unpaid } as any);
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
 
@@ -390,6 +417,7 @@ export default function Home() {
       { wch: 20 },
       { wch: 40 },
       { wch: 10 },
+      { wch: 15 },
       { wch: 15 },
       { wch: 15 },
       { wch: 12 },
@@ -445,7 +473,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center text-black">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center text-black">
       <div className="w-full max-w-md lg:max-w-[1400px] bg-gray-50 min-h-screen shadow-sm relative">
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
@@ -591,6 +619,20 @@ export default function Home() {
               />
             </div>
 
+            <div className="flex flex-col gap-1 w-full lg:w-32">
+              <label className="font-bold text-sm text-gray-700">Получил</label>
+              <select
+                value={receivedBy}
+                onChange={(e) => setReceivedBy(e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-[42px]"
+              >
+                <option value="">—</option>
+                <option value="Алиёр">Алиёр</option>
+                <option value="Худойберди">Худойберди</option>
+                <option value="Озод">Озод</option>
+              </select>
+            </div>
+
             <button
               onClick={saveData}
               disabled={isSubmitting}
@@ -630,6 +672,7 @@ export default function Home() {
                         <th className="px-4 py-3 border-b">Weight</th>
                         <th className="px-4 py-3 border-b">Volume</th>
                         <th className="px-4 py-3 border-b">Status</th>
+                        <th className="px-4 py-3 border-b">Получил</th>
                         <th className="px-4 py-3 border-b">Price</th>
                         <th className="px-4 py-3 border-b text-right">Actions</th>
                       </tr>
@@ -660,6 +703,7 @@ export default function Home() {
                               <option value="Выдано">Выдано</option>
                             </select>
                           </td>
+                          <td className="px-4 py-3 text-black font-medium">{item.receivedBy || "—"}</td>
                           <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0} $</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex gap-3 justify-end text-sm">
@@ -812,6 +856,20 @@ export default function Home() {
               </select>
             </div>
 
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Получил</label>
+              <select
+                value={editForm.receivedBy || ""}
+                onChange={(e) => handleEditChange('receivedBy', e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+              >
+                <option value="">—</option>
+                <option value="Алиёр">Алиёр</option>
+                <option value="Худойберди">Худойберди</option>
+                <option value="Озод">Озод</option>
+              </select>
+            </div>
+
             <div className="flex gap-2 mt-2">
               <button
                 onClick={() => setEditForm(null)}
@@ -829,6 +887,13 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Developer Footer */}
+      <footer className="mt-12 mb-6 text-center px-4 w-full">
+        <p className="text-sm text-gray-500">
+          Хотите такую же профессиональную систему для управления карго? Свяжитесь с разработчиком: Усар Дусарович (+992 93 900 0049, +992 90 041 4777)
+        </p>
+      </footer>
     </div>
   );
 }
