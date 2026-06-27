@@ -51,9 +51,13 @@ export default function Home() {
   const [kub, setKub] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
   const [receivedBy, setReceivedBy] = useState("");
+  const [isOtherReceivedBy, setIsOtherReceivedBy] = useState(false);
+  const [customReceivedBy, setCustomReceivedBy] = useState("");
 
   // Edit Form States
   const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
+  const [isEditOtherReceivedBy, setIsEditOtherReceivedBy] = useState(false);
+  const [editCustomReceivedBy, setEditCustomReceivedBy] = useState("");
 
   // Cargo Data and Search
   const [cargos, setCargos] = useState<CargoItem[]>([]);
@@ -286,7 +290,7 @@ export default function Home() {
         kub: kub || "0",
         status: "Принято",
         totalPrice: parseFloat(totalPrice) || 0,
-        receivedBy,
+        receivedBy: isOtherReceivedBy ? customReceivedBy.trim() : receivedBy,
         createdAt: new Date()
       };
 
@@ -300,6 +304,8 @@ export default function Home() {
       setKub("");
       setTotalPrice("");
       setReceivedBy("");
+      setIsOtherReceivedBy(false);
+      setCustomReceivedBy("");
     } catch (error) {
       console.error("Error adding document: ", error);
       alert("Ошибка при сохранении данных");
@@ -336,9 +342,21 @@ export default function Home() {
     });
   };
 
+  const standardReceivers = ["Алиёр", "Худойберди", "Озод"];
+
+  const openEditForm = (item: CargoItem) => {
+    const isCustom = !!item.receivedBy && !standardReceivers.includes(item.receivedBy);
+    setIsEditOtherReceivedBy(isCustom);
+    setEditCustomReceivedBy(isCustom ? item.receivedBy! : "");
+    setEditForm(isCustom ? { ...item, receivedBy: "Другой" } : item);
+  };
+
   const handleUpdateCargo = async () => {
     if (!editForm || !editForm.id) return;
     try {
+      const finalReceivedBy = isEditOtherReceivedBy
+        ? editCustomReceivedBy.trim()
+        : (editForm.receivedBy === "Другой" ? "" : editForm.receivedBy || "");
       await updateDoc(doc(db, "cargo", editForm.id), {
         name: editForm.name,
         phone: editForm.phone,
@@ -348,10 +366,12 @@ export default function Home() {
         kub: editForm.kub || "0",
         status: editForm.status,
         totalPrice: parseFloat(String(editForm.totalPrice)) || 0,
-        receivedBy: editForm.receivedBy || ""
+        receivedBy: finalReceivedBy
       });
       alert("Обновлено успешно!");
       setEditForm(null);
+      setIsEditOtherReceivedBy(false);
+      setEditCustomReceivedBy("");
     } catch (error) {
       console.error("Error updating document: ", error);
       alert("Ошибка при обновлении");
@@ -622,15 +642,35 @@ export default function Home() {
             <div className="flex flex-col gap-1 w-full lg:w-32">
               <label className="font-bold text-sm text-gray-700">Получил</label>
               <select
-                value={receivedBy}
-                onChange={(e) => setReceivedBy(e.target.value)}
+                value={isOtherReceivedBy ? "Другой" : receivedBy}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "Другой") {
+                    setIsOtherReceivedBy(true);
+                    setReceivedBy("");
+                  } else {
+                    setIsOtherReceivedBy(false);
+                    setCustomReceivedBy("");
+                    setReceivedBy(val);
+                  }
+                }}
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-[42px]"
               >
                 <option value="">—</option>
                 <option value="Алиёр">Алиёр</option>
                 <option value="Худойберди">Худойберди</option>
                 <option value="Озод">Озод</option>
+                <option value="Другой">Другой...</option>
               </select>
+              {isOtherReceivedBy && (
+                <input
+                  type="text"
+                  placeholder="Введите имя получателя"
+                  value={customReceivedBy}
+                  onChange={(e) => setCustomReceivedBy(e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black mt-1"
+                />
+              )}
             </div>
 
             <button
@@ -707,7 +747,7 @@ export default function Home() {
                           <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0} $</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex gap-3 justify-end text-sm">
-                              <button onClick={() => setEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
+                              <button onClick={() => openEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
                               <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
                             </div>
                           </td>
@@ -752,7 +792,7 @@ export default function Home() {
                           <option value="Выдано">Выдано</option>
                         </select>
                         <div className="flex gap-3 text-sm">
-                          <button onClick={() => setEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
+                          <button onClick={() => openEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
                           <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
                         </div>
                       </div>
@@ -859,15 +899,35 @@ export default function Home() {
             <div className="flex flex-col gap-1">
               <label className="font-bold text-sm text-gray-700">Получил</label>
               <select
-                value={editForm.receivedBy || ""}
-                onChange={(e) => handleEditChange('receivedBy', e.target.value)}
+                value={isEditOtherReceivedBy ? "Другой" : (editForm.receivedBy || "")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "Другой") {
+                    setIsEditOtherReceivedBy(true);
+                    handleEditChange('receivedBy', "Другой");
+                  } else {
+                    setIsEditOtherReceivedBy(false);
+                    setEditCustomReceivedBy("");
+                    handleEditChange('receivedBy', val);
+                  }
+                }}
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               >
                 <option value="">—</option>
                 <option value="Алиёр">Алиёр</option>
                 <option value="Худойберди">Худойберди</option>
                 <option value="Озод">Озод</option>
+                <option value="Другой">Другой...</option>
               </select>
+              {isEditOtherReceivedBy && (
+                <input
+                  type="text"
+                  placeholder="Введите имя получателя"
+                  value={editCustomReceivedBy}
+                  onChange={(e) => setEditCustomReceivedBy(e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black mt-1"
+                />
+              )}
             </div>
 
             <div className="flex gap-2 mt-2">
