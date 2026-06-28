@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, LogOut } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Download, LogOut, Camera, X } from "lucide-react";
 import * as XLSX from "xlsx";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface CargoList {
   id: string;
@@ -58,6 +59,13 @@ export default function Home() {
   const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
   const [isEditOtherReceivedBy, setIsEditOtherReceivedBy] = useState(false);
   const [editCustomReceivedBy, setEditCustomReceivedBy] = useState("");
+
+  // Barcode Scanner States
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<"add" | "edit">("add");
+  const [scannedCodes, setScannedCodes] = useState<string[]>([]);
+  const [inputModeMenu, setInputModeMenu] = useState<{ show: boolean; target: "add" | "edit" } | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
   // Cargo Data and Search
   const [cargos, setCargos] = useState<CargoItem[]>([]);
@@ -378,6 +386,96 @@ export default function Home() {
     }
   };
 
+  // Barcode Scanner Effect - Initialize and handle continuous scanning
+  useEffect(() => {
+    if (!isScannerOpen) return;
+
+    const initializeScanner = async () => {
+      try {
+        const html5QrCode = new Html5Qrcode("qr-reader");
+        html5QrCodeRef.current = html5QrCode;
+
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          aspectRatio: 1.0,
+        };
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            // Check for duplicates
+            setScannedCodes((prev) => {
+              if (prev.includes(decodedText)) {
+                // Duplicate detected - vibrate lightly
+                if (navigator.vibrate) {
+                  navigator.vibrate(50);
+                }
+                return prev;
+              }
+              // New code - add to list and vibrate
+              if (navigator.vibrate) {
+                navigator.vibrate(100);
+              }
+              return [...prev, decodedText];
+            });
+          },
+          (errorMessage) => {
+            // Ignore scanning errors
+          }
+        );
+      } catch (err) {
+        console.error("Error initializing scanner:", err);
+      }
+    };
+
+    initializeScanner();
+
+    // Cleanup on unmount or when scanner closes
+    return () => {
+      if (html5QrCodeRef.current) {
+        html5QrCodeRef.current.stop().catch((err) => console.error("Error stopping scanner:", err));
+        html5QrCodeRef.current = null;
+      }
+    };
+  }, [isScannerOpen]);
+
+  // Barcode Scanner Handlers
+  const handleOpenInputMenu = (target: "add" | "edit") => {
+    setInputModeMenu({ show: true, target });
+  };
+
+  const handleStartScanner = (target: "add" | "edit") => {
+    setScannerMode(target);
+    setScannedCodes([]);
+    setIsScannerOpen(true);
+    setInputModeMenu(null);
+  };
+
+  const handleCloseScanner = () => {
+    if (html5QrCodeRef.current) {
+      html5QrCodeRef.current.stop().catch((err) => console.error("Error stopping scanner:", err));
+      html5QrCodeRef.current = null;
+    }
+    setIsScannerOpen(false);
+    setScannedCodes([]);
+  };
+
+  const handleSaveScannedCodes = () => {
+    const codesString = scannedCodes.join("\n");
+    if (scannerMode === "add") {
+      setTrackCodes((prev) => prev ? `${prev}\n${codesString}` : codesString);
+    } else {
+      handleEditChange('trackCodes', editForm?.trackCodes ? `${editForm.trackCodes}\n${codesString}` : codesString);
+    }
+    handleCloseScanner();
+  };
+
+  const handleRemoveScannedCode = (index: number) => {
+    setScannedCodes((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleExportExcel = () => {
     if (filteredCargoList.length === 0) {
       alert("Нет данных для экспорта");
@@ -596,15 +694,23 @@ export default function Home() {
               />
             </div>
 
-            <div className="flex flex-col gap-1 w-full lg:flex-1">
+            <div className="flex flex-col gap-1 w-full lg:flex-1 relative">
               <label className="font-bold text-sm text-gray-700">Трек-коды</label>
-              <input
-                type="text"
-                placeholder="Трек-код"
-                value={trackCodes}
-                onChange={(e) => setTrackCodes(e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Трек-код"
+                  value={trackCodes}
+                  onChange={(e) => setTrackCodes(e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black pr-10"
+                />
+                <button
+                  onClick={() => handleOpenInputMenu("add")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2 w-full lg:w-auto">
@@ -831,14 +937,22 @@ export default function Home() {
               />
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 relative">
               <label className="font-bold text-sm text-gray-700">Трек-коды</label>
-              <textarea
-                value={editForm.trackCodes || ""}
-                onChange={(e) => handleEditChange('trackCodes', e.target.value)}
-                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-32"
-                placeholder="Сканируйте или введите трек-коды..."
-              />
+              <div className="relative">
+                <textarea
+                  value={editForm.trackCodes || ""}
+                  onChange={(e) => handleEditChange('trackCodes', e.target.value)}
+                  className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-32 pr-10"
+                  placeholder="Сканируйте или введите трек-коды..."
+                />
+                <button
+                  onClick={() => handleOpenInputMenu("edit")}
+                  className="absolute right-2 top-8 text-gray-500 hover:text-blue-600"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -942,6 +1056,105 @@ export default function Home() {
                 className="flex-1 bg-blue-600 text-white p-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
               >
                 Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Input Mode Menu */}
+      {inputModeMenu && inputModeMenu.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center p-4 z-[60]" onClick={() => setInputModeMenu(null)}>
+          <div className="bg-white rounded-xl shadow-lg p-4 w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-gray-800 mb-3 text-center">Выберите режим ввода</h3>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => setInputModeMenu(null)}
+                className="bg-gray-100 text-gray-700 p-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Ввести вручную
+              </button>
+              <button
+                onClick={() => handleStartScanner(inputModeMenu.target)}
+                className="bg-blue-600 text-white p-3 rounded-xl font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Camera className="w-5 h-5" />
+                Сканировать камерой
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Barcode Scanner Modal */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 bg-black z-[70] flex flex-col">
+          {/* Camera View - Top Half */}
+          <div className="flex-1 relative bg-black">
+            <div id="qr-reader" className="w-full h-full" />
+            {/* Barcode Frame Overlay */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="relative w-64 h-32 border-2 border-green-500 rounded-lg">
+                {/* Laser Effect */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-red-500 animate-pulse" style={{ animation: "scan 2s linear infinite" }} />
+                <style jsx>{`
+                  @keyframes scan {
+                    0% { top: 0; }
+                    50% { top: calc(100% - 2px); }
+                    100% { top: 0; }
+                  }
+                `}</style>
+              </div>
+            </div>
+            {/* Close Button */}
+            <button
+              onClick={handleCloseScanner}
+              className="absolute top-4 right-4 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Scanned Codes List - Bottom Half */}
+          <div className="h-1/2 bg-white flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-bold text-gray-800">Отсканировано: {scannedCodes.length} шт.</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {scannedCodes.length === 0 ? (
+                <p className="text-gray-500 text-center">Наведите камеру на штрих-код</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {scannedCodes.map((code, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-200"
+                    >
+                      <span className="text-sm font-medium text-gray-800 truncate flex-1">{code}</span>
+                      <button
+                        onClick={() => handleRemoveScannedCode(index)}
+                        className="ml-2 text-red-500 hover:text-red-600 p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Action Buttons */}
+            <div className="p-4 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleCloseScanner}
+                className="flex-1 bg-gray-200 text-gray-700 p-3 rounded-xl font-bold hover:bg-gray-300 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleSaveScannedCodes}
+                className="flex-1 bg-green-600 text-white p-3 rounded-xl font-bold hover:bg-green-700 transition-colors"
+              >
+                Готово
               </button>
             </div>
           </div>
