@@ -81,14 +81,6 @@ const STATUS_STYLES: Record<string, string> = {
   Выдано: "bg-slate-100 text-slate-900 border-slate-200",
 };
 
-function getFallbackUrl(bankName: string) {
-  const name = bankName.trim().toLowerCase();
-  if (name.includes("алиф") || name.includes("alif")) return "https://alif.tj";
-  if (name.includes("душанбе") || name.includes("dushanbe") || name.includes("сити") || name.includes("city")) return "https://dc.tj";
-  if (name.includes("эсхата") || name.includes("eskhata")) return "https://eskhata.com";
-  return "https://www.google.com/search?q=" + encodeURIComponent(bankName + " банк");
-}
-
 function compressImageToBase64(file: File, maxWidth = 800, quality = 0.6): Promise<string> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined") return reject("SSR");
@@ -565,26 +557,6 @@ function PayModal({
     }
   };
 
-  const openBankAppOrSite = () => {
-    if (!method) return;
-    const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
-    const fallbackUrl = getFallbackUrl(method.bankName);
-
-    // iOS Safari shows a scary error popup for unknown custom schemes, so go straight to the bank site.
-    if (isIOS || !method.appScheme) {
-      window.open(fallbackUrl, "_blank");
-      return;
-    }
-
-    // Android / others: attempt deep link in a new tab and fall back to the bank site if the app did not open.
-    const popup = window.open(method.appScheme, "_blank");
-    setTimeout(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      if (popup && popup.closed) return;
-      window.open(fallbackUrl, "_blank");
-    }, 1500);
-  };
-
   return (
     <div className="fixed inset-0 bg-amber-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-amber-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
@@ -617,12 +589,9 @@ function PayModal({
               📋 Скопировать номер карты
             </button>
 
-            <button
-              onClick={openBankAppOrSite}
-              className="w-full py-3 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              🚀 Открыть {method.bankName}
-            </button>
+            <p className="text-sm text-amber-800 text-center leading-relaxed">
+              Номер карты скопирован! Перейдите в мобильное приложение вашего банка, вставьте номер и переведите сумму.
+            </p>
           </div>
         ) : (
           <p className="text-amber-800 text-center">Карта для оплаты не назначена. Свяжитесь с оператором.</p>
