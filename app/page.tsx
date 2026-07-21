@@ -11,6 +11,7 @@ interface CargoList {
   id: string;
   name: string;
   createdAt: { toDate?: () => Date } | null;
+  isPaymentCard?: boolean;
 }
 
 interface CargoItem {
@@ -131,7 +132,10 @@ export default function Home() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedLists: CargoList[] = [];
       snapshot.forEach((docSnap) => {
-        fetchedLists.push({ id: docSnap.id, ...docSnap.data() } as CargoList);
+        const data = { id: docSnap.id, ...docSnap.data() } as CargoList;
+        if (!data.isPaymentCard) {
+          fetchedLists.push(data);
+        }
       });
       setLists(fetchedLists);
 
@@ -159,11 +163,16 @@ export default function Home() {
   // Fetch Payment Methods
   useEffect(() => {
     if (!isAuthenticated) return;
-    const q = query(collection(db, "paymentMethods"), orderBy("createdAt", "desc"));
+    const q = query(collection(db, "lists"), where("isPaymentCard", "==", true));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const methods: PaymentMethod[] = [];
       snapshot.forEach((docSnap) => {
         methods.push({ id: docSnap.id, ...docSnap.data() } as PaymentMethod);
+      });
+      methods.sort((a, b) => {
+        const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return tb - ta;
       });
       setPaymentMethods(methods);
     });
@@ -391,11 +400,13 @@ export default function Home() {
     const scheme = getAppScheme(bank);
     try {
       setAddingCard(true);
-      await addDoc(collection(db, "paymentMethods"), {
+      await addDoc(collection(db, "lists"), {
         bankName: bank,
         cardNumber: newCardNumber.trim(),
         holderName: newCardHolder.trim(),
         appScheme: scheme,
+        isPaymentCard: true,
+        type: "payment_card",
         createdAt: new Date()
       });
       setNewCardBank("");
@@ -412,7 +423,7 @@ export default function Home() {
   const handleDeletePaymentCard = async (id: string) => {
     if (!window.confirm("Удалить эту карту?")) return;
     try {
-      await deleteDoc(doc(db, "paymentMethods", id));
+      await deleteDoc(doc(db, "lists", id));
     } catch (error) {
       console.error("Error deleting payment card:", error);
       alert("Ошибка при удалении карты");
