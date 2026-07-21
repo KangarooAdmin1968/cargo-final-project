@@ -16,6 +16,8 @@ import {
   orderBy,
   where,
   limit,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import {
   Boxes,
@@ -31,6 +33,10 @@ import {
   Phone,
   AlertCircle,
   CheckCircle2,
+  CreditCard,
+  Copy,
+  Upload,
+  X,
 } from "lucide-react";
 
 interface CargoList {
@@ -50,7 +56,19 @@ interface Cargo {
   kub: string;
   status?: string;
   totalPrice?: number;
+  paymentMethodId?: string;
+  receiptUrl?: string;
+  paymentVerified?: boolean;
   createdAt: { toDate?: () => Date } | null;
+}
+
+interface PaymentMethod {
+  id: string;
+  bankName: string;
+  cardNumber: string;
+  holderName: string;
+  appScheme: string;
+  createdAt?: { toDate?: () => Date } | null;
 }
 
 const DOMAIN = "@kangaroo.com";
@@ -59,8 +77,46 @@ const STATUS_STYLES: Record<string, string> = {
   Принято: "bg-amber-100 text-amber-900 border-amber-200",
   "В пути": "bg-blue-100 text-blue-900 border-blue-200",
   "На складе": "bg-emerald-100 text-emerald-900 border-emerald-200",
+  "На проверке": "bg-orange-100 text-orange-900 border-orange-200",
   Выдано: "bg-slate-100 text-slate-900 border-slate-200",
 };
+
+function getFallbackUrl(bankName: string) {
+  const name = bankName.trim().toLowerCase();
+  if (name.includes("алиф") || name.includes("alif")) return "https://alif.tj";
+  if (name.includes("душанбе") || name.includes("dushanbe") || name.includes("сити") || name.includes("city")) return "https://dc.tj";
+  if (name.includes("эсхата") || name.includes("eskhata")) return "https://eskhata.com";
+  return "https://www.google.com/search?q=" + encodeURIComponent(bankName + " банк");
+}
+
+function compressImageToBase64(file: File, maxWidth = 800, quality = 0.6): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") return reject("SSR");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) {
+          h = Math.round(h * maxWidth / w);
+          w = maxWidth;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject("Canvas error");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 function phoneToEmail(phone: string) {
   const normalized = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
@@ -399,7 +455,8 @@ function SmsVerificationModal({
   );
 }
 
-function CargoCard({ cargo, index }: { cargo: Cargo; index: number }) {
+function CargoCard({ cargo, index, onPay, paymentMethods }: { cargo: Cargo; index: number; onPay?: (cargo: Cargo) => void; paymentMethods: PaymentMethod[] }) {
+  const linkedMethod = paymentMethods.find((m) => m.id === cargo.paymentMethodId);
   return (
     <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -446,6 +503,99 @@ function CargoCard({ cargo, index }: { cargo: Cargo; index: number }) {
           <p className="text-base font-semibold text-slate-800">{cargo.kub} куб</p>
         </div>
       </div>
+      {cargo.status !== "Выдано" && onPay && (
+        <button
+          onClick={() => onPay(cargo)}
+          className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+        >
+          <CreditCard className="w-4 h-4" />
+          {linkedMethod ? `Оплатить (${linkedMethod.bankName})` : "Оплатить (Душанбе Сити / Алиф / Эсхата)"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PayModal({
+  cargo,
+  method,
+  onClose,
+  onUpload,
+  uploading,
+}: {
+  cargo: Cargo;
+  method?: PaymentMethod;
+  onClose: () => void;
+  onUpload: (file: File) => void;
+  uploading: boolean;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+
+  const handleCopyAndOpen = async () => {
+    if (!method) return;
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(method.cardNumber);
+      }
+    } catch (err) {
+      console.error("Copy failed", err);
+    }
+    const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile && method.appScheme) {
+      window.location.href = method.appScheme;
+    } else {
+      window.open(getFallbackUrl(method.bankName), "_blank");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-amber-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-amber-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xl font-bold text-amber-950">Оплата: {cargo.name}</h3>
+          <button onClick={onClose} className="text-amber-500 hover:text-amber-700">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {method ? (
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex flex-col gap-2">
+            <p className="text-sm text-amber-800"><span className="font-bold">Банк:</span> {method.bankName}</p>
+            <p className="text-sm text-amber-800 font-mono"><span className="font-bold">Карта:</span> {method.cardNumber}</p>
+            <p className="text-sm text-amber-800"><span className="font-bold">Владелец:</span> {method.holderName}</p>
+            <button
+              onClick={handleCopyAndOpen}
+              className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Скопировать карту и открыть приложение {method.bankName}
+            </button>
+          </div>
+        ) : (
+          <p className="text-amber-800 text-center">Карта для оплаты не назначена. Свяжитесь с оператором.</p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-amber-950 flex items-center gap-2">
+            <Upload className="w-4 h-4" />
+            Загрузить скриншот чека
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm text-amber-900 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-amber-100 file:text-amber-900 file:font-semibold hover:file:bg-amber-200"
+          />
+          {file && <p className="text-xs text-amber-700">Выбран: {file.name}</p>}
+          <button
+            onClick={() => file && onUpload(file)}
+            disabled={!file || uploading}
+            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {uploading ? "Отправка..." : "Отправить чек"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -463,6 +613,9 @@ export default function ClientPortal() {
   const [lists, setLists] = useState<CargoList[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
   const [cargos, setCargos] = useState<Cargo[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPayCargo, setSelectedPayCargo] = useState<Cargo | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -494,6 +647,21 @@ export default function ClientPortal() {
     });
     return () => unsubscribe();
   }, [selectedListId]);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "paymentMethods"),
+      orderBy("createdAt", "desc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const methods: PaymentMethod[] = [];
+      snapshot.forEach((docSnap) => {
+        methods.push({ id: docSnap.id, ...docSnap.data() } as PaymentMethod);
+      });
+      setPaymentMethods(methods);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!selectedListId || !user) {
@@ -581,6 +749,23 @@ export default function ClientPortal() {
   };
 
   const selectedList = lists.find((l) => l.id === selectedListId);
+
+  const handleUploadReceipt = async (file: File, cargoId: string) => {
+    try {
+      setUploadingReceipt(true);
+      const base64 = await compressImageToBase64(file);
+      await updateDoc(doc(db, "cargo", cargoId), {
+        receiptUrl: base64,
+        status: "На проверке"
+      });
+      setSelectedPayCargo(null);
+    } catch (err) {
+      console.error("Receipt upload error:", err);
+      alert("Ошибка при загрузке чека. Попробуйте более лёгкое изображение.");
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-amber-50 flex flex-col">
@@ -689,7 +874,7 @@ export default function ClientPortal() {
                 <>
                   <div className="flex flex-col gap-3 md:hidden">
                     {cargos.map((cargo, idx) => (
-                      <CargoCard key={cargo.id} cargo={cargo} index={idx} />
+                      <CargoCard key={cargo.id} cargo={cargo} index={idx} onPay={() => setSelectedPayCargo(cargo)} paymentMethods={paymentMethods} />
                     ))}
                   </div>
 
@@ -704,6 +889,7 @@ export default function ClientPortal() {
                           <th className="p-4 text-center">Стеллаж</th>
                           <th className="p-4 text-center">Статус</th>
                           <th className="p-4 text-right">Вес / Объём</th>
+                          <th className="p-4 text-center">Оплата</th>
                           <th className="p-4 text-right">Сумма</th>
                         </tr>
                       </thead>
@@ -732,6 +918,17 @@ export default function ClientPortal() {
                             </td>
                             <td className="p-4 text-right text-sm text-amber-800">
                               {cargo.kg} кг / {cargo.kub} куб
+                            </td>
+                            <td className="p-4 text-center">
+                              {cargo.status !== "Выдано" && (
+                                <button
+                                  onClick={() => setSelectedPayCargo(cargo)}
+                                  className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
+                                >
+                                  <CreditCard className="w-3 h-3" />
+                                  Оплатить
+                                </button>
+                              )}
                             </td>
                             <td className="p-4 text-right font-bold text-emerald-700">
                               {cargo.totalPrice || 0} $
@@ -776,6 +973,16 @@ export default function ClientPortal() {
             </button>
           </div>
         </div>
+      )}
+
+      {selectedPayCargo && (
+        <PayModal
+          cargo={selectedPayCargo}
+          method={paymentMethods.find((m) => m.id === selectedPayCargo.paymentMethodId)}
+          onClose={() => setSelectedPayCargo(null)}
+          onUpload={(file) => handleUploadReceipt(file, selectedPayCargo.id)}
+          uploading={uploadingReceipt}
+        />
       )}
 
       <footer className="bg-amber-950 text-amber-100 px-4 py-8">

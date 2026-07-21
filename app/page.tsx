@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, LogOut, Camera, X } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Download, LogOut, Camera, X, CreditCard } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Html5Qrcode } from "html5-qrcode";
 
@@ -25,7 +25,20 @@ interface CargoItem {
   status?: string;
   totalPrice?: number;
   receivedBy?: string;
+  paymentMethodId?: string;
+  paymentCardNumber?: string;
+  receiptUrl?: string;
+  paymentVerified?: boolean;
   createdAt: { toDate?: () => Date } | null;
+}
+
+interface PaymentMethod {
+  id: string;
+  bankName: string;
+  cardNumber: string;
+  holderName: string;
+  appScheme: string;
+  createdAt?: { toDate?: () => Date } | null;
 }
 
 export default function Home() {
@@ -59,6 +72,16 @@ export default function Home() {
   const [editForm, setEditForm] = useState<Partial<CargoItem> | null>(null);
   const [isEditOtherReceivedBy, setIsEditOtherReceivedBy] = useState(false);
   const [editCustomReceivedBy, setEditCustomReceivedBy] = useState("");
+
+  // Payment Methods States
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
+  const [isCardManagerOpen, setIsCardManagerOpen] = useState(false);
+  const [newCardBank, setNewCardBank] = useState("");
+  const [newCardNumber, setNewCardNumber] = useState("");
+  const [newCardHolder, setNewCardHolder] = useState("");
+  const [addingCard, setAddingCard] = useState(false);
+  const [selectedReceiptCargo, setSelectedReceiptCargo] = useState<CargoItem | null>(null);
 
   // Barcode Scanner States
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -129,6 +152,20 @@ export default function Home() {
         setRatePerKg(data.ratePerKg || "0");
         setRatePerVolume(data.ratePerVolume || "0");
       }
+    });
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
+  // Fetch Payment Methods
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const q = query(collection(db, "paymentMethods"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const methods: PaymentMethod[] = [];
+      snapshot.forEach((docSnap) => {
+        methods.push({ id: docSnap.id, ...docSnap.data() } as PaymentMethod);
+      });
+      setPaymentMethods(methods);
     });
     return () => unsubscribe();
   }, [isAuthenticated]);
@@ -288,6 +325,7 @@ export default function Home() {
 
     try {
       setIsSubmitting(true);
+      const selectedMethod = paymentMethods.find((m) => m.id === selectedPaymentMethodId);
       const newCargoData = {
         listId: targetListId,
         stillage,
@@ -299,6 +337,8 @@ export default function Home() {
         status: "Принято",
         totalPrice: parseFloat(totalPrice) || 0,
         receivedBy: isOtherReceivedBy ? customReceivedBy.trim() : receivedBy,
+        paymentMethodId: selectedMethod?.id || "",
+        paymentCardNumber: selectedMethod?.cardNumber || "",
         createdAt: new Date()
       };
 
@@ -314,6 +354,7 @@ export default function Home() {
       setReceivedBy("");
       setIsOtherReceivedBy(false);
       setCustomReceivedBy("");
+      setSelectedPaymentMethodId("");
     } catch (error) {
       console.error("Error adding document: ", error);
       alert("Ошибка при сохранении данных");
@@ -330,6 +371,64 @@ export default function Home() {
         console.error("Error deleting document: ", error);
         alert("Ошибка при удалении");
       }
+    }
+  };
+
+  const getAppScheme = (bankName: string) => {
+    const name = bankName.trim().toLowerCase();
+    if (name.includes("алиф") || name.includes("alif")) return "alifmobile://";
+    if (name.includes("душанбе") || name.includes("dushanbe") || name.includes("сити") || name.includes("city")) return "dushanbecity://";
+    if (name.includes("эсхата") || name.includes("eskhata")) return "eskhata://";
+    return "";
+  };
+
+  const handleAddPaymentCard = async () => {
+    if (!newCardBank.trim() || !newCardNumber.trim() || !newCardHolder.trim()) {
+      alert("Заполните название банка, номер карты и владельца");
+      return;
+    }
+    const bank = newCardBank.trim();
+    const scheme = getAppScheme(bank);
+    try {
+      setAddingCard(true);
+      await addDoc(collection(db, "paymentMethods"), {
+        bankName: bank,
+        cardNumber: newCardNumber.trim(),
+        holderName: newCardHolder.trim(),
+        appScheme: scheme,
+        createdAt: new Date()
+      });
+      setNewCardBank("");
+      setNewCardNumber("");
+      setNewCardHolder("");
+    } catch (error) {
+      console.error("Error adding payment card:", error);
+      alert("Ошибка при добавлении карты");
+    } finally {
+      setAddingCard(false);
+    }
+  };
+
+  const handleDeletePaymentCard = async (id: string) => {
+    if (!window.confirm("Удалить эту карту?")) return;
+    try {
+      await deleteDoc(doc(db, "paymentMethods", id));
+    } catch (error) {
+      console.error("Error deleting payment card:", error);
+      alert("Ошибка при удалении карты");
+    }
+  };
+
+  const handleConfirmPayment = async (cargo: CargoItem) => {
+    try {
+      await updateDoc(doc(db, "cargo", cargo.id), {
+        status: "Выдано",
+        paymentVerified: true
+      });
+      setSelectedReceiptCargo(null);
+    } catch (error) {
+      console.error("Error confirming payment:", error);
+      alert("Ошибка при подтверждении оплаты");
     }
   };
 
@@ -365,6 +464,7 @@ export default function Home() {
       const finalReceivedBy = isEditOtherReceivedBy
         ? editCustomReceivedBy.trim()
         : (editForm.receivedBy === "Другой" ? "" : editForm.receivedBy || "");
+      const editMethod = paymentMethods.find((m) => m.id === editForm.paymentMethodId);
       await updateDoc(doc(db, "cargo", editForm.id), {
         name: editForm.name,
         phone: editForm.phone,
@@ -374,7 +474,9 @@ export default function Home() {
         kub: editForm.kub || "0",
         status: editForm.status,
         totalPrice: parseFloat(String(editForm.totalPrice)) || 0,
-        receivedBy: finalReceivedBy
+        receivedBy: finalReceivedBy,
+        paymentMethodId: editForm.paymentMethodId || "",
+        paymentCardNumber: editMethod?.cardNumber || editForm.paymentCardNumber || ""
       });
       alert("Обновлено успешно!");
       setEditForm(null);
@@ -405,17 +507,25 @@ export default function Home() {
           { facingMode: "environment" },
           config,
           (decodedText) => {
-            // Check for duplicates
+            // Filter out Chinese routing QR garbage and short/invalid codes
+            const isValidTracking = /^[a-zA-Z0-9-]{8,35}$/.test(decodedText);
+            if (!isValidTracking) {
+              if (typeof navigator !== "undefined" && navigator.vibrate) {
+                navigator.vibrate(50);
+              }
+              return;
+            }
+
             setScannedCodes((prev) => {
               if (prev.includes(decodedText)) {
                 // Duplicate detected - vibrate lightly
-                if (navigator.vibrate) {
+                if (typeof navigator !== "undefined" && navigator.vibrate) {
                   navigator.vibrate(50);
                 }
                 return prev;
               }
               // New code - add to list and vibrate
-              if (navigator.vibrate) {
+              if (typeof navigator !== "undefined" && navigator.vibrate) {
                 navigator.vibrate(100);
               }
               return [...prev, decodedText];
@@ -647,6 +757,78 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Payment Methods Manager */}
+          <div className="bg-white rounded-xl p-4 shadow-sm flex flex-col gap-3 border border-gray-100">
+            <button
+              onClick={() => setIsCardManagerOpen(!isCardManagerOpen)}
+              className="flex items-center justify-between w-full"
+            >
+              <p className="font-bold text-gray-700 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-600" />
+                💳 Способы оплаты
+              </p>
+              <span className="text-sm text-blue-600 font-medium">
+                {isCardManagerOpen ? "Скрыть" : "Управлять"}
+              </span>
+            </button>
+            {isCardManagerOpen && (
+              <div className="flex flex-col gap-3 border-t border-gray-100 pt-3">
+                {paymentMethods.length === 0 ? (
+                  <p className="text-sm text-gray-500">Карты ещё не добавлены</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {paymentMethods.map((card) => (
+                      <div key={card.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <div>
+                          <p className="font-bold text-black">{card.bankName}</p>
+                          <p className="text-sm text-gray-600 font-mono">{card.cardNumber}</p>
+                          <p className="text-xs text-gray-500">{card.holderName}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeletePaymentCard(card.id)}
+                          className="text-red-500 hover:text-red-600 p-2"
+                          title="Удалить карту"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Алиф / Душанбе Сити / Эсхата"
+                    value={newCardBank}
+                    onChange={(e) => setNewCardBank(e.target.value)}
+                    className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Номер карты"
+                    value={newCardNumber}
+                    onChange={(e) => setNewCardNumber(e.target.value)}
+                    className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Имя владельца"
+                    value={newCardHolder}
+                    onChange={(e) => setNewCardHolder(e.target.value)}
+                    className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+                  />
+                  <button
+                    onClick={handleAddPaymentCard}
+                    disabled={addingCard}
+                    className="bg-blue-600 text-white rounded-md px-4 py-2 font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {addingCard ? "Добавление..." : "Добавить карту"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Search Bar */}
           <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
             <Search className="text-gray-400 w-5 h-5" />
@@ -779,6 +961,22 @@ export default function Home() {
               )}
             </div>
 
+            <div className="flex flex-col gap-1 w-full lg:w-48">
+              <label className="font-bold text-sm text-gray-700">Карта для оплаты</label>
+              <select
+                value={selectedPaymentMethodId}
+                onChange={(e) => setSelectedPaymentMethodId(e.target.value)}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black h-[42px]"
+              >
+                <option value="">— Выберите карту —</option>
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.bankName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               onClick={saveData}
               disabled={isSubmitting}
@@ -846,13 +1044,22 @@ export default function Home() {
                               <option value="Принято">Принято</option>
                               <option value="В пути">В пути</option>
                               <option value="На складе">На складе</option>
+                              <option value="На проверке">На проверке</option>
                               <option value="Выдано">Выдано</option>
                             </select>
                           </td>
                           <td className="px-4 py-3 text-black font-medium">{item.receivedBy || "—"}</td>
                           <td className="px-4 py-3 font-bold text-black">{item.totalPrice || 0} $</td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex gap-3 justify-end text-sm">
+                            <div className="flex flex-wrap gap-3 justify-end text-sm items-center">
+                              {item.receiptUrl && !item.paymentVerified && (
+                                <button
+                                  onClick={() => setSelectedReceiptCargo(item)}
+                                  className="bg-green-100 text-green-700 px-2 py-1 rounded-md font-bold hover:bg-green-200 transition-colors"
+                                >
+                                  Посмотреть чек
+                                </button>
+                              )}
                               <button onClick={() => openEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
                               <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
                             </div>
@@ -886,7 +1093,7 @@ export default function Home() {
                         <span>{item.kub} Kub</span>
                         <span className="font-bold">{item.totalPrice || 0} $</span>
                       </div>
-                      <div className="mt-2 flex justify-between items-center">
+                      <div className="mt-2 flex flex-wrap justify-between items-center gap-2">
                         <select
                           value={item.status || "Принято"}
                           onChange={(e) => handleStatusChange(item.id, e.target.value)}
@@ -895,8 +1102,17 @@ export default function Home() {
                           <option value="Принято">Принято</option>
                           <option value="В пути">В пути</option>
                           <option value="На складе">На складе</option>
+                          <option value="На проверке">На проверке</option>
                           <option value="Выдано">Выдано</option>
                         </select>
+                        {item.receiptUrl && !item.paymentVerified && (
+                          <button
+                            onClick={() => setSelectedReceiptCargo(item)}
+                            className="bg-green-100 text-green-700 px-2 py-1 rounded-md font-bold text-xs hover:bg-green-200 transition-colors"
+                          >
+                            Чек
+                          </button>
+                        )}
                         <div className="flex gap-3 text-sm">
                           <button onClick={() => openEditForm(item)} className="text-blue-600 font-medium hover:underline">Изменить</button>
                           <button onClick={() => handleDeleteCargo(item.id)} className="text-red-600 font-medium hover:underline">Удалить</button>
@@ -1006,6 +1222,7 @@ export default function Home() {
                 <option value="Принято">Принято</option>
                 <option value="В пути">В пути</option>
                 <option value="На складе">На складе</option>
+                <option value="На проверке">На проверке</option>
                 <option value="Выдано">Выдано</option>
               </select>
             </div>
@@ -1044,6 +1261,26 @@ export default function Home() {
               )}
             </div>
 
+            <div className="flex flex-col gap-1">
+              <label className="font-bold text-sm text-gray-700">Карта для оплаты</label>
+              <select
+                value={editForm?.paymentMethodId || ""}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const method = paymentMethods.find((m) => m.id === id);
+                  setEditForm((prev) => prev ? { ...prev, paymentMethodId: id, paymentCardNumber: method?.cardNumber || "" } : prev);
+                }}
+                className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
+              >
+                <option value="">— Выберите карту —</option>
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.bankName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex gap-2 mt-2">
               <button
                 onClick={() => setEditForm(null)}
@@ -1058,6 +1295,31 @@ export default function Home() {
                 Сохранить
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {selectedReceiptCargo && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">Чек оплаты</h2>
+              <button onClick={() => setSelectedReceiptCargo(null)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {selectedReceiptCargo.receiptUrl ? (
+              <img src={selectedReceiptCargo.receiptUrl} alt="Чек" className="w-full rounded-lg object-contain max-h-[60vh]" />
+            ) : (
+              <p className="text-gray-500 text-center">Изображение чека не найдено</p>
+            )}
+            <button
+              onClick={() => handleConfirmPayment(selectedReceiptCargo)}
+              className="w-full bg-green-600 text-white p-3 rounded-xl font-bold hover:bg-green-700 transition-colors"
+            >
+              Подтвердить оплату
+            </button>
           </div>
         </div>
       )}
