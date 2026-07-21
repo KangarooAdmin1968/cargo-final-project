@@ -717,9 +717,14 @@ export default function Home() {
         {/* Top Navigation */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Settings className="w-6 h-6 text-blue-600" />
-              <h1 className="text-xl font-bold text-gray-800">Админ панель</h1>
+            <div className="flex items-center gap-3">
+              <img src="/logo.jpg" alt="Kangaroo Cargo" className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover border border-amber-300 shadow-sm" />
+              <div className="flex flex-col">
+                <h1 className="text-xl font-bold text-gray-800">Kangaroo Cargo</h1>
+                <span className="text-xs md:text-sm text-amber-900 font-medium italic mt-0.5">
+                  Kangaroo Cargo — скорость и качество нашей работы отличают нас от других
+                </span>
+              </div>
             </div>
             <button onClick={handleLogout} className="text-red-500 flex items-center gap-1 hover:text-red-600">
               <LogOut className="w-5 h-5" />

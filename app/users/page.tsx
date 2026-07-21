@@ -123,39 +123,13 @@ function emailToPhone(email: string | null) {
 function KangarooLogo() {
   return (
     <div className="flex items-center gap-3">
-      <svg
-        width="52"
-        height="52"
-        viewBox="0 0 64 64"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="shrink-0"
-      >
-        <circle cx="32" cy="32" r="30" className="fill-amber-500" />
-        <path
-          d="M18 44c-2 0-3-2-2-4 1-2 4-3 6-1 2 2 1 5-1 5h-3zm12 4c-2 0-4-2-4-4s2-4 4-4 4 2 4 4-2 4-4 4z"
-          className="fill-amber-950"
-        />
-        <path
-          d="M40 20c-4-2-10-2-14 1-3 2-5 5-5 9v2c-2 1-4 3-4 6 0 2 2 4 4 4h22c4 0 7-3 7-7 0-7-5-13-10-15z"
-          className="fill-amber-950"
-        />
-        <circle cx="27" cy="28" r="2" className="fill-amber-50" />
-        <path
-          d="M48 34l4-2c2-1 3 1 2 3l-3 4c-1 2-3 2-4 0l-2-3 3-2z"
-          className="fill-amber-950"
-        />
-        <path
-          d="M14 36c-2 1-3 4-2 6s4 3 6 1c1-1 2-3 1-5s-3-3-5-2z"
-          className="fill-amber-950"
-        />
-      </svg>
+      <img src="/logo.jpg" alt="Kangaroo Cargo" className="w-12 h-12 md:w-16 md:h-16 rounded-xl object-cover border border-amber-300 shadow-sm" />
       <div className="flex flex-col">
         <span className="text-2xl font-extrabold tracking-tight text-amber-950">
           Kangaroo Cargo
         </span>
-        <span className="text-xs font-medium text-amber-700">
-          Быстрая. Надёжная. Ваша.
+        <span className="text-xs md:text-sm text-amber-900 font-medium italic mt-0.5">
+          Kangaroo Cargo — скорость и качество нашей работы отличают нас от других
         </span>
       </div>
     </div>
