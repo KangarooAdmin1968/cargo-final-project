@@ -530,22 +530,59 @@ function PayModal({
   uploading: boolean;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleCopyAndOpen = async () => {
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 3000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  const copyCardNumber = async () => {
     if (!method) return;
+    const text = method.cardNumber;
+    let ok = false;
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard) {
-        await navigator.clipboard.writeText(method.cardNumber);
+      if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      } else if (typeof document !== "undefined") {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
       }
     } catch (err) {
       console.error("Copy failed", err);
     }
-    const isMobile = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile && method.appScheme) {
-      window.location.href = method.appScheme;
-    } else {
-      window.open(getFallbackUrl(method.bankName), "_blank");
+    if (ok) {
+      setCopied(true);
     }
+  };
+
+  const openBankAppOrSite = () => {
+    if (!method) return;
+    const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent) && !("MSStream" in window);
+    const fallbackUrl = getFallbackUrl(method.bankName);
+
+    // iOS Safari shows a scary error popup for unknown custom schemes, so go straight to the bank site.
+    if (isIOS || !method.appScheme) {
+      window.open(fallbackUrl, "_blank");
+      return;
+    }
+
+    // Android / others: attempt deep link in a new tab and fall back to the bank site if the app did not open.
+    const popup = window.open(method.appScheme, "_blank");
+    setTimeout(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (popup && popup.closed) return;
+      window.open(fallbackUrl, "_blank");
+    }, 1500);
   };
 
   return (
@@ -559,16 +596,32 @@ function PayModal({
         </div>
 
         {method ? (
-          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex flex-col gap-2">
-            <p className="text-sm text-amber-800"><span className="font-bold">Банк:</span> {method.bankName}</p>
-            <p className="text-sm text-amber-800 font-mono"><span className="font-bold">Карта:</span> {method.cardNumber}</p>
-            <p className="text-sm text-amber-800"><span className="font-bold">Владелец:</span> {method.holderName}</p>
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100 flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <p className="text-sm text-amber-800"><span className="font-bold">Банк:</span> {method.bankName}</p>
+              <p className="text-sm text-amber-800 font-mono"><span className="font-bold">Карта:</span> {method.cardNumber}</p>
+              <p className="text-sm text-amber-800"><span className="font-bold">Владелец:</span> {method.holderName}</p>
+            </div>
+
+            {copied && (
+              <div className="bg-green-100 text-green-800 px-3 py-2 rounded-xl text-sm font-bold text-center">
+                ✅ Номер карты скопирован в буфер обмена!
+              </div>
+            )}
+
             <button
-              onClick={handleCopyAndOpen}
-              className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+              onClick={copyCardNumber}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <Copy className="w-4 h-4" />
-              Скопировать карту и открыть приложение {method.bankName}
+              📋 Скопировать номер карты
+            </button>
+
+            <button
+              onClick={openBankAppOrSite}
+              className="w-full py-3 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              🚀 Открыть {method.bankName}
             </button>
           </div>
         ) : (
