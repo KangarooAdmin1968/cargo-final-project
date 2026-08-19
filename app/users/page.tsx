@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { auth, db } from "../../lib/firebase";
-import { signInAnonymously } from "firebase/auth";
 import {
-  getDoc,
-  setDoc,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import {
   updateDoc,
-  serverTimestamp,
   doc,
   query,
   collection,
@@ -109,8 +111,13 @@ function cleanPhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-function clientDocId(phone: string) {
-  return `client_${cleanPhone(phone)}`;
+function phoneToEmail(phone: string) {
+  return `${cleanPhone(phone)}@kangaroocargo.app`;
+}
+
+function emailToPhone(email: string | null) {
+  if (!email) return "";
+  return email.split("@")[0] || "";
 }
 
 function normalizePhoneForMatch(phone: string) {
@@ -327,46 +334,13 @@ function AuthForm({
   );
 }
 
-function PasswordResetModal({
+function ForgotPasswordModal({
   open,
   onClose,
-  onReset,
-  loading,
-  error,
-  setError,
 }: {
   open: boolean;
   onClose: () => void;
-  onReset: (phone: string, newPassword: string) => Promise<void>;
-  loading: boolean;
-  error: string;
-  setError: (msg: string) => void;
 }) {
-  const [phone, setPhone] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setPhone("");
-      setNewPassword("");
-      setConfirm("");
-      setShowPassword(false);
-    }
-  }, [open]);
-
-  const handleReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!newPassword) return;
-    if (newPassword !== confirm) {
-      setError("Пароли не совпадают");
-      return;
-    }
-    await onReset(phone, newPassword);
-  };
-
   if (!open) return null;
 
   return (
@@ -379,74 +353,26 @@ function PasswordResetModal({
           </button>
         </div>
 
-        {error && (
-          <div className="mb-4 bg-red-50 text-red-700 text-sm p-3 rounded-xl border border-red-100 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            {error}
-          </div>
-        )}
+        <p className="text-sm text-slate-700 mb-5 leading-relaxed">
+          Для сброса пароля, пожалуйста, обратитесь к оператору или администратору карго по телефонам:
+        </p>
 
-        <form onSubmit={handleReset} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-amber-950">Номер телефона</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+992 93 000 0000"
-                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-amber-950">Новый пароль</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-11 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 hover:text-amber-700"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-amber-950">Повторите новый пароль</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
-                required
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60"
+        <div className="flex flex-col gap-3">
+          <a
+            href="tel:+992939000049"
+            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors text-center"
           >
-            {loading ? "Сохранение..." : "Сохранить пароль"}
-          </button>
-        </form>
+            +992 93 900 0049
+          </a>
+          <a
+            href="tel:+992900414777"
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors text-center"
+          >
+            +992 90 041 4777
+          </a>
+        </div>
+
+        <p className="text-xs text-slate-500 text-center mt-4">Нажмите на номер, чтобы позвонить</p>
       </div>
     </div>
   );
@@ -693,26 +619,19 @@ export default function ClientPortal() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   useEffect(() => {
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch((err) => console.error("Anonymous auth error:", err));
-    }
-  }, []);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = localStorage.getItem("kc-client");
-    if (stored) {
-      setClientPhone(stored);
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user?.email?.endsWith("@kangaroocargo.app")) {
+        const phone = emailToPhone(user.email);
+        setClientPhone(phone);
+        localStorage.setItem("kc-client", phone);
+      } else {
+        setClientPhone("");
+        localStorage.removeItem("kc-client");
+      }
+    });
+    return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (clientPhone) {
-      localStorage.setItem("kc-client", clientPhone);
-    } else {
-      localStorage.removeItem("kc-client");
-    }
-  }, [clientPhone]);
 
   useEffect(() => {
     const q = query(collection(db, "lists"), orderBy("createdAt", "desc"));
@@ -776,22 +695,18 @@ export default function ClientPortal() {
     return () => unsubscribe();
   }, [selectedListId, clientPhone]);
 
-  const signInClient = (phone: string) => {
-    setClientPhone(cleanPhone(phone));
-  };
-
   const handleLogin = async (phoneInput: string, password: string) => {
     setLoading(true);
     setError("");
-    const id = clientDocId(phoneInput);
     try {
-      const snap = await getDoc(doc(db, "lists", id));
-      if (!snap.exists()) throw new Error("Неверный телефон или пароль");
-      const data = snap.data() as { password?: string };
-      if (data.password !== password) throw new Error("Неверный телефон или пароль");
-      signInClient(phoneInput);
+      await signInWithEmailAndPassword(auth, phoneToEmail(phoneInput), password);
     } catch (err: any) {
-      setError(err.message || "Неверный телефон или пароль");
+      const code = err.code || "";
+      if (["auth/user-not-found", "auth/wrong-password", "auth/invalid-credential"].includes(code)) {
+        setError("Неверный номер телефона или пароль.");
+      } else {
+        setError(err.message || "Ошибка входа");
+      }
     } finally {
       setLoading(false);
     }
@@ -800,52 +715,34 @@ export default function ClientPortal() {
   const handleRegister = async (phoneInput: string, password: string) => {
     setLoading(true);
     setError("");
-    const id = clientDocId(phoneInput);
-    const clean = cleanPhone(phoneInput);
     try {
-      const existing = await getDoc(doc(db, "lists", id));
-      if (existing.exists()) {
-        throw new Error("Этот номер уже зарегистрирован. Пожалуйста, войдите.");
-      }
-      await setDoc(doc(db, "lists", id), {
-        isClientAccount: true,
-        type: "client_user",
-        phone: clean,
-        password: password,
-        updatedAt: serverTimestamp(),
-      });
-      signInClient(phoneInput);
+      await createUserWithEmailAndPassword(auth, phoneToEmail(phoneInput), password);
+      const clean = cleanPhone(phoneInput);
+      localStorage.setItem("kc-client", clean);
     } catch (err: any) {
-      setError(err.message || "Ошибка регистрации");
+      const code = err.code || "";
+      if (code === "auth/email-already-in-use") {
+        setError("Этот номер уже зарегистрирован. Пожалуйста, войдите в систему.");
+      } else if (code === "auth/weak-password") {
+        setError("Пароль должен содержать минимум 6 символов.");
+      } else {
+        setError(err.message || "Ошибка регистрации");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleReset = async (phoneInput: string, newPassword: string) => {
-    setLoading(true);
-    setError("");
-    const id = clientDocId(phoneInput);
-    const clean = cleanPhone(phoneInput);
+  const handleLogout = async () => {
     try {
-      const snap = await getDoc(doc(db, "lists", id));
-      if (!snap.exists()) {
-        throw new Error("Этот номер не зарегистрирован. Пожалуйста, зарегистрируйтесь.");
-      }
-      await updateDoc(doc(db, "lists", id), { password: newPassword, updatedAt: serverTimestamp() });
-      setShowResetModal(false);
-      signInClient(phoneInput);
+      await signOut(auth);
     } catch (err: any) {
-      setError(err.message || "Ошибка сброса пароля");
-    } finally {
-      setLoading(false);
+      console.error("Logout error:", err);
     }
-  };
-
-  const handleLogout = () => {
     setClientPhone("");
     setCargos([]);
     setSelectedListId("");
+    setSelectedPayCargo(null);
     localStorage.removeItem("kc-client");
   };
 
@@ -1056,13 +953,9 @@ export default function ClientPortal() {
       </main>
 
       {showResetModal && (
-        <PasswordResetModal
+        <ForgotPasswordModal
           open={showResetModal}
           onClose={() => setShowResetModal(false)}
-          onReset={handleReset}
-          loading={loading}
-          error={error}
-          setError={setError}
         />
       )}
 
