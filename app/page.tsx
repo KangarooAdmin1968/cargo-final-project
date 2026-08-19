@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, ReactNode } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
@@ -40,6 +40,37 @@ interface PaymentMethod {
   holderName: string;
   appScheme: string;
   createdAt?: { toDate?: () => Date } | null;
+}
+
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightText(text: string, query: string): ReactNode {
+  if (!query || !text) return text;
+  const lowerQuery = query.toLowerCase();
+  if (!text.toLowerCase().includes(lowerQuery)) return text;
+  const lines = text.split("\n");
+  return lines.map((line, lineIdx) => {
+    const pattern = new RegExp(`(${escapeRegExp(query)})`, "gi");
+    const parts = line.split(pattern);
+    return (
+      <span key={lineIdx} className={lines.length > 1 ? "block" : undefined}>
+        {parts.map((part, i) =>
+          part.toLowerCase() === lowerQuery ? (
+            <mark
+              key={i}
+              className="bg-yellow-300 text-amber-950 font-bold px-0.5 rounded"
+            >
+              {part}
+            </mark>
+          ) : (
+            part
+          )
+        )}
+      </span>
+    );
+  });
 }
 
 export default function Home() {
@@ -1062,9 +1093,9 @@ export default function Home() {
                       {filteredCargoList.map((item, idx) => (
                         <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
                           <td className="px-4 py-3">{idx + 1}</td>
-                          <td className="px-4 py-3 font-bold text-black">{item.name}</td>
-                          <td className="px-4 py-3 text-black">{item.phone}</td>
-                          <td className="px-4 py-3 text-black max-w-[150px] truncate" title={item.trackCodes}>{item.trackCodes}</td>
+                          <td className="px-4 py-3 font-bold text-black">{highlightText(item.name, searchQuery)}</td>
+                          <td className="px-4 py-3 text-black">{highlightText(item.phone, searchQuery)}</td>
+                          <td className="px-4 py-3 text-black max-w-[200px] whitespace-pre-wrap break-words">{highlightText(item.trackCodes || "", searchTrackQuery)}</td>
                           <td className="px-4 py-3">
                             <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
                               {item.stillage}
@@ -1112,17 +1143,17 @@ export default function Home() {
                   {filteredCargoList.map((item) => (
                     <div key={item.id} className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 flex flex-col gap-2">
                       <div className="flex justify-between items-start">
-                        <span className="font-bold text-black">{item.name}</span>
+                        <span className="font-bold text-black">{highlightText(item.name, searchQuery)}</span>
                         <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-md">
                           Стеллаж: {item.stillage}
                         </span>
                       </div>
                       <div className="text-sm text-black">
-                        {item.phone}
+                        {highlightText(item.phone, searchQuery)}
                       </div>
                       {item.trackCodes && (
                         <div className="text-sm text-black">
-                          Трек: {item.trackCodes}
+                          Трек: {highlightText(item.trackCodes, searchTrackQuery)}
                         </div>
                       )}
                       <div className="flex gap-4 text-sm text-black mt-1 items-center font-medium">
