@@ -1,14 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { auth, db } from "../../lib/firebase";
-import {
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-} from "firebase/auth";
+import { db } from "../../lib/firebase";
 import {
   collection,
   onSnapshot,
@@ -16,7 +9,10 @@ import {
   orderBy,
   where,
   doc,
+  getDoc,
+  setDoc,
   updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import {
   Boxes,
@@ -31,7 +27,6 @@ import {
   PackageOpen,
   Phone,
   AlertCircle,
-  CheckCircle2,
   CreditCard,
   Copy,
   Upload,
@@ -110,6 +105,10 @@ function compressImageToBase64(file: File, maxWidth = 800, quality = 0.6): Promi
   });
 }
 
+function clientId(phone: string) {
+  return phone.replace(/\s+/g, "").replace(/\D/g, "");
+}
+
 function phoneToEmail(phone: string) {
   const normalized = phone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
   return `${normalized}${DOMAIN}`;
@@ -182,11 +181,11 @@ function AuthForm({
 }: {
   onLogin: (phone: string, password: string) => void;
   onRegister: (phone: string, password: string) => void;
-  onForgot: (phone: string) => void;
+  onForgot: () => void;
   loading: boolean;
   error: string;
 }) {
-  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -195,10 +194,6 @@ function AuthForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim()) return;
-    if (mode === "forgot") {
-      onForgot(phone);
-      return;
-    }
     if (!password) return;
     if (mode === "register" && password !== confirm) {
       alert("Пароли не совпадают");
@@ -215,23 +210,19 @@ function AuthForm({
     <div className="w-full max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-amber-100 p-6 md:p-8 overflow-hidden">
       <div className="flex flex-col items-center gap-2 mb-6">
         <div className="bg-amber-50 p-3 rounded-2xl">
-          {mode === "forgot" ? (
-            <ShieldCheck className="w-10 h-10 text-amber-600" />
-          ) : mode === "register" ? (
+          {mode === "register" ? (
             <UserCheck className="w-10 h-10 text-amber-600" />
           ) : (
             <Boxes className="w-10 h-10 text-amber-600" />
           )}
         </div>
         <h2 className="text-2xl font-bold text-amber-950 text-center">
-          {mode === "login" && "Вход в личный кабинет"}
-          {mode === "register" && "Регистрация клиента"}
-          {mode === "forgot" && "Восстановление пароля"}
+          {mode === "login" ? "Вход в личный кабинет" : "Регистрация клиента"}
         </h2>
         <p className="text-sm text-amber-800 text-center">
-          {mode === "login" && "Войдите по номеру телефона и паролю"}
-          {mode === "register" && "Создайте аккаунт по номеру телефона"}
-          {mode === "forgot" && "Введите номер телефона для сброса пароля"}
+          {mode === "login"
+            ? "Войдите по номеру телефона и паролю"
+            : "Создайте аккаунт по номеру телефона"}
         </p>
       </div>
 
@@ -258,29 +249,27 @@ function AuthForm({
           </div>
         </div>
 
-        {mode !== "forgot" && (
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-amber-950">Пароль</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-11 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 hover:text-amber-700"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-semibold text-amber-950">Пароль</label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full pl-10 pr-11 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 hover:text-amber-700"
+            >
+              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
           </div>
-        )}
+        </div>
 
         {mode === "register" && (
           <div className="flex flex-col gap-1">
@@ -308,9 +297,7 @@ function AuthForm({
             ? "Подождите..."
             : mode === "login"
             ? "Войти"
-            : mode === "register"
-            ? "Зарегистрироваться"
-            : "Сбросить пароль"}
+            : "Зарегистрироваться"}
         </button>
       </form>
 
@@ -326,7 +313,7 @@ function AuthForm({
             </button>
             <button
               type="button"
-              onClick={() => setMode("forgot")}
+              onClick={onForgot}
               className="text-amber-600 hover:text-amber-800"
             >
               Парольро фаромуш кардан?
@@ -340,15 +327,6 @@ function AuthForm({
             className="text-amber-700 hover:text-amber-900 font-medium"
           >
             Уже есть аккаунт? Войти
-          </button>
-        )}
-        {mode === "forgot" && (
-          <button
-            type="button"
-            onClick={() => setMode("login")}
-            className="text-amber-700 hover:text-amber-900 font-medium"
-          >
-            Вернуться ко входу
           </button>
         )}
       </div>
@@ -416,6 +394,226 @@ function SmsVerificationModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PasswordResetModal({
+  open,
+  onClose,
+  onVerifyPhone,
+  onReset,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onVerifyPhone: (phone: string) => Promise<void>;
+  onReset: (phone: string, password: string) => Promise<void>;
+}) {
+  const [step, setStep] = useState(1);
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const testCode = "1234";
+
+  useEffect(() => {
+    if (open) {
+      setStep(1);
+      setPhone("");
+      setCode("");
+      setNewPassword("");
+      setConfirm("");
+      setError("");
+      setLoading(false);
+      setShowPassword(false);
+    }
+  }, [open]);
+
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!phone.trim()) return;
+    setLoading(true);
+    try {
+      await onVerifyPhone(phone);
+      setStep(2);
+    } catch (err: any) {
+      setError(err.message || "Номер не найден");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (code !== testCode) {
+      setError("Неверный код подтверждения");
+      return;
+    }
+    setStep(3);
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!newPassword) return;
+    if (newPassword !== confirm) {
+      setError("Пароли не совпадают");
+      return;
+    }
+    setLoading(true);
+    try {
+      await onReset(phone, newPassword);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Ошибка сброса пароля");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-amber-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-amber-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-amber-950">
+            {step === 1 && "Восстановление пароля"}
+            {step === 2 && "Код подтверждения"}
+            {step === 3 && "Новый пароль"}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-amber-500 hover:text-amber-700"
+            type="button"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 bg-red-50 text-red-700 text-sm p-3 rounded-xl border border-red-100 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            {error}
+          </div>
+        )}
+
+        {step === 1 && (
+          <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-4">
+            <p className="text-sm text-amber-800 text-center">
+              Введите номер телефона, зарегистрированный в системе.
+            </p>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+992 93 000 0000"
+                className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60"
+            >
+              {loading ? "Проверка..." : "Продолжить"}
+            </button>
+          </form>
+        )}
+
+        {step === 2 && (
+          <form onSubmit={handleCodeSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm text-amber-800 text-center">
+                Мы отправили код на {phone}. Введите 4-значный код.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs px-3 py-2 rounded-lg text-center">
+                Тестовый код: <span className="font-bold">{testCode}</span>
+              </div>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              placeholder="••••"
+              className="w-full text-center text-2xl tracking-[0.5em] py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
+              required
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors"
+              >
+                Назад
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors"
+              >
+                Подтвердить
+              </button>
+            </div>
+          </form>
+        )}
+
+        {step === 3 && (
+          <form onSubmit={handleReset} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-amber-950">Новый пароль</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-11 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500 hover:text-amber-700"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-amber-950">Повторите новый пароль</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-4 py-3 bg-amber-50 border border-amber-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-amber-950 placeholder:text-amber-300"
+                  required
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors disabled:opacity-60"
+            >
+              {loading ? "Сохранение..." : "Сохранить пароль"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -597,14 +795,14 @@ function PayModal({
 }
 
 export default function ClientPortal() {
-  const [user, setUser] = useState(auth.currentUser);
-  const [phone, setPhone] = useState("");
+  const [client, setClient] = useState<{ email: string } | null>(null);
+  const [clientPhone, setClientPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSmsModal, setShowSmsModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [pendingPhone, setPendingPhone] = useState("");
   const [pendingPassword, setPendingPassword] = useState("");
-  const [showForgotSuccess, setShowForgotSuccess] = useState(false);
 
   const [lists, setLists] = useState<CargoList[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
@@ -614,14 +812,29 @@ export default function ClientPortal() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        setPhone(emailToPhone(currentUser.email));
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("kc-client");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.email) {
+          setClient(parsed);
+        }
+      } catch {
+        localStorage.removeItem("kc-client");
       }
-    });
-    return () => unsubscribe();
+    }
   }, []);
+
+  useEffect(() => {
+    if (client) {
+      localStorage.setItem("kc-client", JSON.stringify(client));
+      setClientPhone(emailToPhone(client.email));
+    } else {
+      localStorage.removeItem("kc-client");
+      setClientPhone("");
+    }
+  }, [client]);
 
   useEffect(() => {
     const q = query(
@@ -667,12 +880,12 @@ export default function ClientPortal() {
   }, []);
 
   useEffect(() => {
-    if (!selectedListId || !user) {
+    if (!selectedListId || !client) {
       setCargos([]);
       return;
     }
 
-    const clientPhone = emailToPhone(user.email);
+    const currentPhone = emailToPhone(client.email);
     const q = query(
       collection(db, "cargo"),
       where("listId", "==", selectedListId),
@@ -687,21 +900,30 @@ export default function ClientPortal() {
       // Strict ownership check: only cargo where phone matches or contains the client phone
       const filtered = cargoData.filter((item) => {
         const itemPhone = (item.phone || "").replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-        const client = clientPhone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
-        return itemPhone === client || itemPhone.includes(client) || client.includes(itemPhone);
+        const clientPhone = currentPhone.replace(/\s+/g, "").replace(/[^0-9+]/g, "");
+        return itemPhone === clientPhone || itemPhone.includes(clientPhone) || clientPhone.includes(itemPhone);
       });
 
       setCargos(filtered);
     });
 
     return () => unsubscribe();
-  }, [selectedListId, user]);
+  }, [selectedListId, client]);
+
+  const signInClient = (email: string) => {
+    setClient({ email });
+  };
 
   const handleLogin = async (phoneInput: string, password: string) => {
     setLoading(true);
     setError("");
+    const id = clientId(phoneInput);
     try {
-      await signInWithEmailAndPassword(auth, phoneToEmail(phoneInput), password);
+      const snap = await getDoc(doc(db, "clients", id));
+      if (!snap.exists()) throw new Error("Неверный телефон или пароль");
+      const data = snap.data() as { email?: string; password: string };
+      if (data.password !== password) throw new Error("Неверный телефон или пароль");
+      signInClient(data.email || phoneToEmail(phoneInput));
     } catch (err: any) {
       setError(err.message || "Неверный телефон или пароль");
     } finally {
@@ -709,19 +931,43 @@ export default function ClientPortal() {
     }
   };
 
-  const handleRegister = (phoneInput: string, password: string) => {
-    setPendingPhone(phoneInput);
-    setPendingPassword(password);
-    setShowSmsModal(true);
+  const handleRegister = async (phoneInput: string, password: string) => {
+    setLoading(true);
     setError("");
+    const id = clientId(phoneInput);
+    try {
+      const existing = await getDoc(doc(db, "clients", id));
+      if (existing.exists()) {
+        throw new Error("Этот номер уже зарегистрирован. Пожалуйста, войдите в систему.");
+      }
+      setPendingPhone(phoneInput);
+      setPendingPassword(password);
+      setShowSmsModal(true);
+    } catch (err: any) {
+      setError(err.message || "Ошибка проверки номера");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const confirmRegistration = async (code: string) => {
     setShowSmsModal(false);
     setLoading(true);
     setError("");
+    const id = clientId(pendingPhone);
     try {
-      await createUserWithEmailAndPassword(auth, phoneToEmail(pendingPhone), pendingPassword);
+      if (code !== "1111") throw new Error("Неверный код подтверждения");
+      const existing = await getDoc(doc(db, "clients", id));
+      if (existing.exists()) {
+        throw new Error("Этот номер уже зарегистрирован. Пожалуйста, войдите в систему.");
+      }
+      await setDoc(doc(db, "clients", id), {
+        phone: pendingPhone.trim(),
+        email: phoneToEmail(pendingPhone),
+        password: pendingPassword,
+        createdAt: serverTimestamp(),
+      });
+      signInClient(phoneToEmail(pendingPhone));
     } catch (err: any) {
       setError(err.message || "Ошибка регистрации");
     } finally {
@@ -731,22 +977,36 @@ export default function ClientPortal() {
     }
   };
 
-  const handleForgot = async (phoneInput: string) => {
+  const handleVerifyResetPhone = async (phoneInput: string) => {
+    const id = clientId(phoneInput);
+    const snap = await getDoc(doc(db, "clients", id));
+    if (!snap.exists()) {
+      throw new Error("Этот номер не зарегистрирован. Пожалуйста, зарегистрируйтесь.");
+    }
+  };
+
+  const handleReset = async (phoneInput: string, newPassword: string) => {
     setLoading(true);
     setError("");
+    const id = clientId(phoneInput);
     try {
-      await sendPasswordResetEmail(auth, phoneToEmail(phoneInput));
-      setShowForgotSuccess(true);
+      const clientSnap = await getDoc(doc(db, "clients", id));
+      if (!clientSnap.exists()) {
+        throw new Error("Номер не найден.");
+      }
+      const data = clientSnap.data() as { email?: string };
+      await updateDoc(doc(db, "clients", id), { password: newPassword });
+      signInClient(data.email || phoneToEmail(phoneInput));
     } catch (err: any) {
       setError(err.message || "Ошибка сброса пароля");
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    setPhone("");
+    setClient(null);
     setCargos([]);
     setSelectedListId("");
   };
@@ -777,10 +1037,10 @@ export default function ClientPortal() {
       <header className="bg-white border-b border-amber-100 px-4 py-5">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           <KangarooLogo />
-          {user ? (
+          {client ? (
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col items-end">
-                <span className="text-sm font-bold text-amber-950">{phone}</span>
+                <span className="text-sm font-bold text-amber-950">{clientPhone}</span>
                 <span className="text-xs text-amber-600">Клиент</span>
               </div>
               <button
@@ -805,11 +1065,11 @@ export default function ClientPortal() {
 
       <main className="flex-1 px-4 py-6 md:py-8">
         <div className="max-w-5xl mx-auto">
-          {!user ? (
+          {!client ? (
             <AuthForm
               onLogin={handleLogin}
               onRegister={handleRegister}
-              onForgot={handleForgot}
+              onForgot={() => setShowResetModal(true)}
               loading={loading}
               error={error}
             />
@@ -960,22 +1220,13 @@ export default function ClientPortal() {
         />
       )}
 
-      {showForgotSuccess && (
-        <div className="fixed inset-0 bg-amber-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center border border-amber-100">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-amber-950 mb-2">Письмо отправлено</h3>
-            <p className="text-sm text-amber-800 mb-5">
-              Инструкция по сбросу пароля отправлена на почту, связанную с вашим номером.
-            </p>
-            <button
-              onClick={() => setShowForgotSuccess(false)}
-              className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors"
-            >
-              Понятно
-            </button>
-          </div>
-        </div>
+      {showResetModal && (
+        <PasswordResetModal
+          open={showResetModal}
+          onClose={() => setShowResetModal(false)}
+          onVerifyPhone={handleVerifyResetPhone}
+          onReset={handleReset}
+        />
       )}
 
       {selectedPayCargo && (
