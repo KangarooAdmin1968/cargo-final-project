@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
-import { Settings, Trash2, Plus, Search, Download, LogOut, Camera, X, CreditCard } from "lucide-react";
+import { Settings, Trash2, Plus, Search, Package, Download, LogOut, Camera, X, CreditCard } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Html5Qrcode } from "html5-qrcode";
 
@@ -95,6 +95,8 @@ export default function Home() {
   const [cargos, setCargos] = useState<CargoItem[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchTrackInput, setSearchTrackInput] = useState("");
+  const [searchTrackQuery, setSearchTrackQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Search Debounce
@@ -104,6 +106,13 @@ export default function Home() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTrackQuery(searchTrackInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTrackInput]);
 
   const nextStillage = cargos.length + 1;
 
@@ -210,14 +219,14 @@ export default function Home() {
   // Derived filtered cargo list
   const filteredCargoList = cargos.filter((item) => {
     if (selectedListId !== "all" && item.listId !== selectedListId) return false;
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const matchName = item.name.toLowerCase().includes(q);
+    const namePhoneQuery = searchQuery.toLowerCase();
+    const trackQuery = searchTrackQuery.toLowerCase();
+    const matchName = namePhoneQuery ? item.name.toLowerCase().includes(namePhoneQuery) : true;
     const phoneStr = item.phone || "";
-    const matchPhone = phoneStr.includes(q);
+    const matchPhone = namePhoneQuery ? phoneStr.toLowerCase().includes(namePhoneQuery) : true;
     const trackStr = item.trackCodes || "";
-    const matchTrack = trackStr.toLowerCase().includes(q);
-    return matchName || matchPhone || matchTrack;
+    const matchTrack = trackQuery ? trackStr.toLowerCase().includes(trackQuery) : true;
+    return (matchName || matchPhone) && matchTrack;
   });
 
   // Handlers
@@ -846,15 +855,27 @@ export default function Home() {
           </div>
 
           {/* Search Bar */}
-          <div className="bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
-            <Search className="text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Поиск по имени, тел, трек-коду"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="flex-1 bg-transparent outline-none text-black text-sm"
-            />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+              <Search className="text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="🔍 Поиск по имени / тел"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-black text-sm"
+              />
+            </div>
+            <div className="flex-1 bg-white rounded-xl shadow-sm p-3 flex items-center gap-2 border border-gray-100">
+              <Package className="text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="📦 Поиск по трек-коду"
+                value={searchTrackInput}
+                onChange={(e) => setSearchTrackInput(e.target.value)}
+                className="flex-1 bg-transparent outline-none text-black text-sm"
+              />
+            </div>
           </div>
 
           {/* Data Entry Form */}
