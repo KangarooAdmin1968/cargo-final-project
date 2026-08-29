@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, ReactNode } from "react";
+import { useState, useEffect, useRef, ReactNode, useMemo } from "react";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy, where, getDocs, updateDoc } from "firebase/firestore";
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { db, auth } from "../lib/firebase";
@@ -92,6 +92,7 @@ export default function Home() {
   const [stillage, setStillage] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [trackCodes, setTrackCodes] = useState("");
   const [kg, setKg] = useState("");
   const [kub, setKub] = useState("");
@@ -259,6 +260,25 @@ export default function Home() {
     const matchTrack = trackQuery ? trackStr.toLowerCase().includes(trackQuery) : true;
     return (matchName || matchPhone) && matchTrack;
   });
+
+  // Client name/phone autocomplete suggestions based on previous cargo records
+  const clientSuggestions = useMemo(() => {
+    const query = name.trim().toLowerCase();
+    if (!query || !showClientSuggestions) return [];
+    const seen = new Set<string>();
+    const pairs: { name: string; phone: string }[] = [];
+    for (const c of cargos) {
+      const clientName = c.name || "";
+      const clientPhone = c.phone || "";
+      const key = `${clientName}|${clientPhone}`;
+      if (!seen.has(key) && clientName.toLowerCase().includes(query)) {
+        seen.add(key);
+        pairs.push({ name: clientName, phone: clientPhone });
+      }
+      if (pairs.length >= 10) break;
+    }
+    return pairs;
+  }, [cargos, name, showClientSuggestions]);
 
   // Handlers
   const handleLogin = async (e: React.FormEvent) => {
@@ -922,15 +942,42 @@ export default function Home() {
               />
             </div>
 
-            <div className="flex flex-col gap-1 w-full lg:flex-1">
+            <div className="flex flex-col gap-1 w-full lg:flex-1 relative">
               <label className="font-bold text-sm text-gray-700">Название</label>
               <input
                 type="text"
                 placeholder="Имя"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setShowClientSuggestions(true);
+                }}
+                onFocus={() => setShowClientSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
+              {showClientSuggestions && clientSuggestions.length > 0 && (
+                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  {clientSuggestions.map((client, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setName(client.name);
+                        setPhone(client.phone);
+                        setShowClientSuggestions(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-black hover:bg-blue-50 focus:bg-blue-50 border-b last:border-b-0 border-gray-100"
+                    >
+                      <span className="font-semibold">{client.name}</span>
+                      {client.phone && (
+                        <span className="text-gray-500 ml-2 text-xs">{client.phone}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1 w-full lg:flex-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { db } from "../../lib/firebase";
 import {
   updateDoc,
@@ -28,6 +28,8 @@ import {
   Copy,
   Upload,
   X,
+  Send,
+  ShoppingBag,
 } from "lucide-react";
 
 interface CargoList {
@@ -50,6 +52,7 @@ interface Cargo {
   status?: string;
   totalPrice?: number;
   paymentMethodId?: string;
+  paymentCardNumber?: string;
   receiptUrl?: string;
   paymentVerified?: boolean;
   createdAt?: { toDate?: () => Date } | null;
@@ -559,19 +562,35 @@ function CargoCard({
 
 function PayModal({
   cargo,
-  method,
+  paymentMethods,
   onClose,
   onUpload,
   uploading,
 }: {
   cargo: Cargo;
-  method?: PaymentMethod;
+  paymentMethods: PaymentMethod[];
   onClose: () => void;
   onUpload: (file: File) => void;
   uploading: boolean;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const method = useMemo<PaymentMethod>(() => {
+    if (cargo.paymentCardNumber && paymentMethods.length) {
+      const matched = paymentMethods.find((m) => m.cardNumber === cargo.paymentCardNumber);
+      if (matched) return matched;
+    }
+    if (paymentMethods.length > 0) {
+      return paymentMethods[0];
+    }
+    return {
+      id: "default",
+      bankName: "Душанбе Сити",
+      cardNumber: "+992 93 900 0049",
+      holderName: "Усар Дусарович",
+    };
+  }, [cargo, paymentMethods]);
 
   useEffect(() => {
     if (!copied) return;
@@ -1046,12 +1065,40 @@ export default function ClientPortal() {
       {selectedPayCargo && (
         <PayModal
           cargo={selectedPayCargo}
-          method={paymentMethods.find((m) => m.id === selectedPayCargo.paymentMethodId)}
+          paymentMethods={paymentMethods}
           onClose={() => setSelectedPayCargo(null)}
           onUpload={(file) => handleUploadReceipt(file, selectedPayCargo.id)}
           uploading={uploadingReceipt}
         />
       )}
+
+      <section className="bg-amber-50 border-t border-amber-100 px-4 py-6">
+        <div className="max-w-5xl mx-auto flex flex-col gap-3">
+          <h3 className="text-center text-amber-950 font-bold text-sm md:text-base">
+            Полезные ссылки / Пайвандҳои муфид
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a
+              href="https://t.me/Kangaroo_cargo_zafarobod"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-sky-500 hover:bg-sky-600 text-white rounded-xl p-3.5 shadow-sm flex items-center justify-center gap-2 font-bold transition-colors"
+            >
+              <Send className="w-5 h-5" />
+              Наш Telegram канал (Зафаробод)
+            </a>
+            <a
+              href="https://mobile.yangkeduo.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl p-3.5 shadow-sm flex items-center justify-center gap-2 font-bold transition-colors"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              Приложение Pinduoduo
+            </a>
+          </div>
+        </div>
+      </section>
 
       <footer className="bg-slate-900 text-slate-200 px-4 py-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
