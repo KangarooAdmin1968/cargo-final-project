@@ -29,7 +29,7 @@ import {
   Upload,
   X,
   Send,
-  ShoppingBag,
+  Package,
 } from "lucide-react";
 
 interface CargoList {
@@ -1088,13 +1088,12 @@ export default function ClientPortal() {
               Наш Telegram канал (Зафаробод)
             </a>
             <a
-              href="https://mobile.yangkeduo.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-red-500 hover:bg-red-600 text-white rounded-xl p-3.5 shadow-sm flex items-center justify-center gap-2 font-bold transition-colors"
+              href="/pinduoduo.apk"
+              download="pinduoduo.apk"
+              className="bg-red-500 hover:bg-red-600 text-white rounded-xl p-3.5 shadow-sm flex items-center justify-center gap-2 font-bold transition-colors flex-1 text-center"
             >
-              <ShoppingBag className="w-5 h-5" />
-              Приложение Pinduoduo
+              <Package className="w-5 h-5" />
+              Скачать Pinduoduo (APK)
             </a>
           </div>
         </div>
