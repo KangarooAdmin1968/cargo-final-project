@@ -192,15 +192,14 @@ export default function Home() {
   // Global client directory for autocomplete (all trips / all cargo)
   useEffect(() => {
     if (!isAuthenticated) return;
-    const q = query(collection(db, "cargo"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, "cargo"), (snapshot) => {
       const seen = new Map<string, { name: string; phone: string }>();
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as CargoItem;
         const clientName = (data.name || "").trim();
         const clientPhone = (data.phone || "").trim();
         if (!clientName) return;
-        const key = `${clientName.toLowerCase()}|${clientPhone.toLowerCase()}`;
+        const key = clientName.toLowerCase();
         if (!seen.has(key)) {
           seen.set(key, { name: clientName, phone: clientPhone });
         }
@@ -209,6 +208,12 @@ export default function Home() {
     });
     return () => unsubscribe();
   }, [isAuthenticated]);
+
+  const selectClient = (client: { name: string; phone: string }) => {
+    setName(client.name);
+    setPhone(client.phone);
+    setShowClientSuggestions(false);
+  };
 
   // Fetch Rates
   useEffect(() => {
@@ -272,10 +277,14 @@ export default function Home() {
 
   // Client name/phone autocomplete suggestions (global, all trips)
   const clientSuggestions = useMemo(() => {
-    const query = name.trim().toLowerCase();
-    if (!query || !showClientSuggestions) return [];
+    const q = name.trim().toLowerCase();
+    if (!q || !showClientSuggestions) return [];
     return clientDirectory
-      .filter((client) => client.name.toLowerCase().includes(query))
+      .filter((client) => {
+        const clientName = (client.name || "").toLowerCase();
+        const clientPhone = client.phone || "";
+        return clientName.includes(q) || clientPhone.includes(q);
+      })
       .slice(0, 10);
   }, [clientDirectory, name, showClientSuggestions]);
 
@@ -291,15 +300,6 @@ export default function Home() {
     const matchTrack = trackQuery ? trackStr.toLowerCase().includes(trackQuery) : true;
     return (matchName || matchPhone) && matchTrack;
   });
-
-  // Client name/phone autocomplete suggestions (global, all trips)
-  const clientSuggestions = useMemo(() => {
-    const query = name.trim().toLowerCase();
-    if (!query || !showClientSuggestions) return [];
-    return clientDirectory
-      .filter((client) => client.name.toLowerCase().includes(query))
-      .slice(0, 10);
-  }, [clientDirectory, name, showClientSuggestions]);
 
   // Handlers
   const handleLogin = async (e: React.FormEvent) => {
@@ -978,24 +978,16 @@ export default function Home() {
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
               {showClientSuggestions && clientSuggestions.length > 0 && (
-                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-amber-400 rounded-xl shadow-2xl z-[100] max-h-60 overflow-y-auto divide-y divide-gray-100">
                   {clientSuggestions.map((client, idx) => (
-                    <button
+                    <div
                       key={idx}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setName(client.name);
-                        setPhone(client.phone);
-                        setShowClientSuggestions(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-black hover:bg-blue-50 focus:bg-blue-50 border-b last:border-b-0 border-gray-100"
+                      onPointerDown={() => selectClient(client)}
+                      className="p-3 hover:bg-amber-50 cursor-pointer flex justify-between items-center active:bg-amber-100"
                     >
-                      <span className="font-semibold">{client.name}</span>
-                      {client.phone && (
-                        <span className="text-gray-500 ml-2 text-xs">{client.phone}</span>
-                      )}
-                    </button>
+                      <span className="font-bold text-gray-900">{client.name}</span>
+                      <span className="text-sm font-semibold text-blue-600 font-mono">{client.phone}</span>
+                    </div>
                   ))}
                 </div>
               )}
