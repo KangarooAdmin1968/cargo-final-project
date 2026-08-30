@@ -978,15 +978,15 @@ export default function Home() {
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
               {showClientSuggestions && clientSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-amber-400 rounded-xl shadow-2xl z-[100] max-h-60 overflow-y-auto divide-y divide-gray-100">
+                <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-[100] max-h-56 overflow-y-auto divide-y divide-slate-100 overflow-hidden">
                   {clientSuggestions.map((client, idx) => (
                     <div
                       key={idx}
                       onPointerDown={() => selectClient(client)}
-                      className="p-3 hover:bg-amber-50 cursor-pointer flex justify-between items-center active:bg-amber-100"
+                      className="p-3 hover:bg-slate-50 active:bg-amber-50 cursor-pointer flex items-center justify-between transition-colors"
                     >
-                      <span className="font-bold text-gray-900">{client.name}</span>
-                      <span className="text-sm font-semibold text-blue-600 font-mono">{client.phone}</span>
+                      <span className="font-semibold text-slate-900 text-sm">{client.name}</span>
+                      <span className="text-xs font-mono font-medium text-slate-600 bg-slate-100 border border-slate-200/60 px-2.5 py-1 rounded-lg">{client.phone}</span>
                     </div>
                   ))}
                 </div>
