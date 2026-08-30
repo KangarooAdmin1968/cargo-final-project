@@ -108,10 +108,6 @@ function cleanPhone(phone: string) {
   return phone.replace(/\D/g, "");
 }
 
-function normalizePhoneForMatch(phone: string) {
-  return phone.replace(/\D/g, "");
-}
-
 function KangarooLogo() {
   return (
     <div className="flex items-center gap-3">
@@ -757,7 +753,12 @@ export default function ClientPortal() {
       return;
     }
 
-    const currentClean = normalizePhoneForMatch(clientPhone);
+    const currentClean = cleanPhone(clientPhone);
+    if (currentClean.length < 6) {
+      setCargos([]);
+      return;
+    }
+
     const q = query(collection(db, "cargo"), where("listId", "==", selectedListId), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const cargoData: Cargo[] = [];
@@ -766,8 +767,9 @@ export default function ClientPortal() {
       });
 
       const filtered = cargoData.filter((item) => {
-        const itemPhone = normalizePhoneForMatch(item.phone || "");
-        return itemPhone === currentClean || itemPhone.includes(currentClean) || currentClean.includes(itemPhone);
+        const itemPhone = cleanPhone(item.phone || "");
+        if (itemPhone.length < 6) return false;
+        return itemPhone.includes(currentClean) || currentClean.includes(itemPhone);
       });
 
       setCargos(filtered);

@@ -125,6 +125,7 @@ export default function Home() {
 
   // Cargo Data and Search
   const [cargos, setCargos] = useState<CargoItem[]>([]);
+  const [clientDirectory, setClientDirectory] = useState<{ name: string; phone: string }[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTrackInput, setSearchTrackInput] = useState("");
@@ -188,6 +189,27 @@ export default function Home() {
     return () => unsubscribe();
   }, [isAuthenticated, selectedListId]);
 
+  // Global client directory for autocomplete (all trips / all cargo)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const q = query(collection(db, "cargo"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const seen = new Map<string, { name: string; phone: string }>();
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as CargoItem;
+        const clientName = (data.name || "").trim();
+        const clientPhone = (data.phone || "").trim();
+        if (!clientName) return;
+        const key = `${clientName.toLowerCase()}|${clientPhone.toLowerCase()}`;
+        if (!seen.has(key)) {
+          seen.set(key, { name: clientName, phone: clientPhone });
+        }
+      });
+      setClientDirectory(Array.from(seen.values()));
+    });
+    return () => unsubscribe();
+  }, [isAuthenticated]);
+
   // Fetch Rates
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -248,6 +270,15 @@ export default function Home() {
     return () => unsubscribe();
   }, [isAuthenticated, selectedListId]);
 
+  // Client name/phone autocomplete suggestions (global, all trips)
+  const clientSuggestions = useMemo(() => {
+    const query = name.trim().toLowerCase();
+    if (!query || !showClientSuggestions) return [];
+    return clientDirectory
+      .filter((client) => client.name.toLowerCase().includes(query))
+      .slice(0, 10);
+  }, [clientDirectory, name, showClientSuggestions]);
+
   // Derived filtered cargo list
   const filteredCargoList = cargos.filter((item) => {
     if (selectedListId !== "all" && item.listId !== selectedListId) return false;
@@ -261,24 +292,14 @@ export default function Home() {
     return (matchName || matchPhone) && matchTrack;
   });
 
-  // Client name/phone autocomplete suggestions based on previous cargo records
+  // Client name/phone autocomplete suggestions (global, all trips)
   const clientSuggestions = useMemo(() => {
     const query = name.trim().toLowerCase();
     if (!query || !showClientSuggestions) return [];
-    const seen = new Set<string>();
-    const pairs: { name: string; phone: string }[] = [];
-    for (const c of cargos) {
-      const clientName = c.name || "";
-      const clientPhone = c.phone || "";
-      const key = `${clientName}|${clientPhone}`;
-      if (!seen.has(key) && clientName.toLowerCase().includes(query)) {
-        seen.add(key);
-        pairs.push({ name: clientName, phone: clientPhone });
-      }
-      if (pairs.length >= 10) break;
-    }
-    return pairs;
-  }, [cargos, name, showClientSuggestions]);
+    return clientDirectory
+      .filter((client) => client.name.toLowerCase().includes(query))
+      .slice(0, 10);
+  }, [clientDirectory, name, showClientSuggestions]);
 
   // Handlers
   const handleLogin = async (e: React.FormEvent) => {
