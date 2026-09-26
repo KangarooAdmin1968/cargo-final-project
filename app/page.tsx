@@ -42,6 +42,23 @@ interface PaymentMethod {
   createdAt?: { toDate?: () => Date } | null;
 }
 
+interface ClientDirectoryEntry {
+  name: string;
+  phone: string;
+  nameKey: string;
+  phoneKey: string;
+  lastSeen: number;
+}
+
+function normalizeClientText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -125,7 +142,7 @@ export default function Home() {
 
   // Cargo Data and Search
   const [cargos, setCargos] = useState<CargoItem[]>([]);
-  const [clientDirectory, setClientDirectory] = useState<{ name: string; phone: string }[]>([]);
+  const [clientDirectory, setClientDirectory] = useState<ClientDirectoryEntry[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTrackInput, setSearchTrackInput] = useState("");
@@ -192,20 +209,42 @@ export default function Home() {
   // Global client directory for autocomplete (all trips / all cargo)
   useEffect(() => {
     if (!isAuthenticated) return;
-    const unsubscribe = onSnapshot(collection(db, "cargo"), (snapshot) => {
-      const seen = new Map<string, { name: string; phone: string }>();
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as CargoItem;
-        const clientName = (data.name || "").trim();
-        const clientPhone = (data.phone || "").trim();
-        if (!clientName) return;
-        const key = clientName.toLowerCase();
-        if (!seen.has(key)) {
-          seen.set(key, { name: clientName, phone: clientPhone });
-        }
-      });
-      setClientDirectory(Array.from(seen.values()));
-    });
+    const unsubscribe = onSnapshot(
+      collection(db, "cargo"),
+      (snapshot) => {
+        const seen = new Map<string, ClientDirectoryEntry>();
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as Partial<CargoItem>;
+          const clientName = String(data?.name ?? "").trim();
+          const clientPhone = String(data?.phone ?? "").trim();
+          if (!clientName) return;
+          const createdAtField = data?.createdAt;
+          const lastSeen =
+            createdAtField && typeof createdAtField.toDate === "function"
+              ? createdAtField.toDate().getTime()
+              : 0;
+          const nameKey = normalizeClientText(clientName);
+          const phoneKey = digitsOnly(clientPhone);
+          const key = `${nameKey}|${phoneKey}`;
+          const existing = seen.get(key);
+          if (!existing || lastSeen >= existing.lastSeen) {
+            seen.set(key, {
+              name: clientName,
+              phone: clientPhone,
+              nameKey,
+              phoneKey,
+              lastSeen,
+            });
+          }
+        });
+        setClientDirectory(
+          Array.from(seen.values()).sort((a, b) => b.lastSeen - a.lastSeen)
+        );
+      },
+      (error) => {
+        console.error("Client directory listener error:", error);
+      }
+    );
     return () => unsubscribe();
   }, [isAuthenticated]);
 
@@ -277,14 +316,15 @@ export default function Home() {
 
   // Client name/phone autocomplete suggestions (global, all trips)
   const clientSuggestions = useMemo(() => {
-    const q = name.trim().toLowerCase();
+    const q = normalizeClientText(name);
     if (!q || !showClientSuggestions) return [];
+    const qDigits = digitsOnly(q);
     return clientDirectory
-      .filter((client) => {
-        const clientName = (client.name || "").toLowerCase();
-        const clientPhone = client.phone || "";
-        return clientName.includes(q) || clientPhone.includes(q);
-      })
+      .filter(
+        (client) =>
+          client.nameKey.includes(q) ||
+          (qDigits.length > 0 && client.phoneKey.includes(qDigits))
+      )
       .slice(0, 10);
   }, [clientDirectory, name, showClientSuggestions]);
 
@@ -978,11 +1018,14 @@ export default function Home() {
                 className="border border-gray-200 rounded-md p-2 w-full outline-none focus:border-blue-500 text-black"
               />
               {showClientSuggestions && clientSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-[100] max-h-56 overflow-y-auto divide-y divide-slate-100 overflow-hidden">
-                  {clientSuggestions.map((client, idx) => (
+                <div
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl z-[100] max-h-56 overflow-y-auto divide-y divide-slate-100"
+                >
+                  {clientSuggestions.map((client) => (
                     <div
-                      key={idx}
-                      onPointerDown={() => selectClient(client)}
+                      key={`${client.nameKey}|${client.phoneKey}`}
+                      onClick={() => selectClient(client)}
                       className="p-3 hover:bg-slate-50 active:bg-amber-50 cursor-pointer flex items-center justify-between transition-colors"
                     >
                       <span className="font-semibold text-slate-900 text-sm">{client.name}</span>
